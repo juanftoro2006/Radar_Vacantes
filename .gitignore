@@ -1,0 +1,7 @@
+﻿.venv/
+__pycache__/
+*.pyc
+perfil.json
+empresas.csv
+credenciales*.json
+.vscode/

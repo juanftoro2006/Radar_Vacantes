@@ -1,0 +1,149 @@
+{
+  "name": "Radar de Vacantes",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Cada dia 6am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-320, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "PEGA_AQUI_EL_ID_DEL_SHEET",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "empresas",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Leer empresas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-100, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.fuente === 'greenhouse' ? 'https://boards-api.greenhouse.io/v1/boards/' + $json.token + '/jobs?content=true' : 'https://api.lever.co/v0/postings/' + $json.token + '?mode=json' }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Consultar ATS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [120, 0],
+      "onError": "continueRegularOutput",
+      "notes": "onError=continue: un board caido no debe tumbar la corrida completa"
+    },
+    {
+      "parameters": {
+        "jsCode": "// NORMALIZAR\n// Cada ATS devuelve una forma distinta. Toda esa diferencia vive AQUI\n// y solo aqui. Agregar un ATS nuevo = agregar una entrada al mapa.\n\nconst hoy = new Date().toISOString().slice(0, 10);\n\n// Emparejamos cada respuesta HTTP con la empresa que la origino,\n// usando el mismo indice: n8n conserva el orden de los items.\nconst empresas = $('Leer empresas').all();\nconst respuestas = $input.all();\n\nconst mapeo = {\n  greenhouse: (v) => ({\n    id_externo: String(v.id),\n    titulo: v.title,\n    ubicacion: v.location?.name ?? 'sin especificar',\n    url: v.absolute_url\n  }),\n  lever: (v) => ({\n    id_externo: v.id,\n    titulo: v.text,\n    ubicacion: v.categories?.location ?? 'sin especificar',\n    url: v.hostedUrl\n  })\n};\n\nconst salida = [];\n\nrespuestas.forEach((res, i) => {\n  const { empresa, fuente } = empresas[i].json;\n\n  // Greenhouse devuelve { jobs: [...] }, Lever devuelve el array pelado.\n  const vacantes = res.json?.jobs ?? (Array.isArray(res.json) ? res.json : []);\n  if (!mapeo[fuente]) return;\n\n  vacantes.forEach((v) => {\n    const base = mapeo[fuente](v);\n\n    salida.push({\n      json: {\n        ...base,\n        empresa,\n        fuente,\n        // Clave 1: identidad tecnica. Compuesta porque dos empresas\n        // distintas pueden usar el mismo id numerico.\n        clave: `${fuente}:${empresa}:${base.id_externo}`,\n        // Clave 2: huella de contenido. Sobrevive a la republicacion\n        // con id nuevo, que es el churn del que nos queremos proteger.\n        huella: `${empresa}:${base.titulo.toLowerCase().replace(/[^a-z0-9]/g, '')}`,\n        descubierta: hoy,\n        estado: 'nueva'\n      }\n    });\n  });\n});\n\nreturn salida;"
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "PEGA_AQUI_EL_ID_DEL_SHEET",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "vacantes",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Leer registro",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [560, 0],
+      "executeOnce": true,
+      "notes": "executeOnce: leemos el registro UNA vez, no una por vacante"
+    },
+    {
+      "parameters": {
+        "jsCode": "// DEDUPLICAR\n// Una vacante es nueva solo si NINGUNA de sus dos claves ya existe.\n// Si la clave no esta en el registro, es de las ultimas 24h:\n// la frescura sale gratis de la deduplicacion, sin guardar historial.\n\nconst registro = $input.all();\n\n// Set en vez de array: la busqueda pasa de O(n) a O(1).\n// Con 3000 filas x 900 vacantes por corrida, la diferencia se nota.\nconst clavesVistas = new Set(registro.map((r) => r.json.clave));\nconst huellasVistas = new Set(registro.map((r) => r.json.huella));\n\nconst nuevas = $('Normalizar').all().filter((v) => {\n  return !clavesVistas.has(v.json.clave) && !huellasVistas.has(v.json.huella);\n});\n\nconsole.log(`Nuevas: ${nuevas.length} de ${$('Normalizar').all().length} revisadas`);\n\nreturn nuevas;"
+      },
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Filtrar nuevas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 0]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PEGA_AQUI_EL_ID_DEL_SHEET",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "vacantes",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Guardar nuevas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1000, 0]
+    }
+  ],
+  "connections": {
+    "Cada dia 6am": {
+      "main": [[{ "node": "Leer empresas", "type": "main", "index": 0 }]]
+    },
+    "Leer empresas": {
+      "main": [[{ "node": "Consultar ATS", "type": "main", "index": 0 }]]
+    },
+    "Consultar ATS": {
+      "main": [[{ "node": "Normalizar", "type": "main", "index": 0 }]]
+    },
+    "Normalizar": {
+      "main": [[{ "node": "Leer registro", "type": "main", "index": 0 }]]
+    },
+    "Leer registro": {
+      "main": [[{ "node": "Filtrar nuevas", "type": "main", "index": 0 }]]
+    },
+    "Filtrar nuevas": {
+      "main": [[{ "node": "Guardar nuevas", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
