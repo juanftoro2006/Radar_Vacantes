@@ -1,7 +1,14 @@
-﻿.venv/
+.venv/
 __pycache__/
 *.pyc
+.vscode/
+
+# Datos personales: perfil real y empresas objetivo
 perfil.json
 empresas.csv
+
+# Exports crudos de n8n: traen ID de Sheet y credenciales.
+# El export saneado se versiona como workflow.json
 credenciales*.json
-.vscode/
+Radar de Vacantes.json
+*.export.json

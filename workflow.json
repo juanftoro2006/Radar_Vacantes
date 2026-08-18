@@ -6,144 +6,416 @@
         "rule": {
           "interval": [
             {
-              "field": "hours",
-              "triggerAtHour": 6
+              "field": "hours"
             }
           ]
         }
       },
-      "id": "a1000000-0000-4000-8000-000000000001",
+      "id": "001eb335-ae91-478e-8740-eb1c23e67c3e",
       "name": "Cada dia 6am",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-320, 0]
+      "position": [
+        288,
+        -128
+      ]
     },
     {
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "PEGA_AQUI_EL_ID_DEL_SHEET",
-          "mode": "id"
+          "value": "PEGA_AQUI_EL_ID_DE_TU_SHEET",
+          "mode": "list",
+          "cachedResultName": ""
         },
         "sheetName": {
           "__rl": true,
-          "value": "empresas",
-          "mode": "name"
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "empresa"
         },
         "options": {}
       },
-      "id": "a1000000-0000-4000-8000-000000000002",
+      "id": "781012c6-101a-4d2e-a519-ae886e9522f9",
       "name": "Leer empresas",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [-100, 0]
+      "position": [
+        512,
+        -128
+      ]
     },
     {
       "parameters": {
-        "url": "={{ $json.fuente === 'greenhouse' ? 'https://boards-api.greenhouse.io/v1/boards/' + $json.token + '/jobs?content=true' : 'https://api.lever.co/v0/postings/' + $json.token + '?mode=json' }}",
+        "url": "={{ $json.plantilla_url.replace('{t}', $json.token) }}",
         "options": {
           "timeout": 15000
         }
       },
-      "id": "a1000000-0000-4000-8000-000000000003",
+      "id": "25d07bc8-d128-4816-a9cd-738bfd546767",
       "name": "Consultar ATS",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [120, 0],
+      "position": [
+        736,
+        -128
+      ],
       "onError": "continueRegularOutput",
       "notes": "onError=continue: un board caido no debe tumbar la corrida completa"
     },
     {
       "parameters": {
-        "jsCode": "// NORMALIZAR\n// Cada ATS devuelve una forma distinta. Toda esa diferencia vive AQUI\n// y solo aqui. Agregar un ATS nuevo = agregar una entrada al mapa.\n\nconst hoy = new Date().toISOString().slice(0, 10);\n\n// Emparejamos cada respuesta HTTP con la empresa que la origino,\n// usando el mismo indice: n8n conserva el orden de los items.\nconst empresas = $('Leer empresas').all();\nconst respuestas = $input.all();\n\nconst mapeo = {\n  greenhouse: (v) => ({\n    id_externo: String(v.id),\n    titulo: v.title,\n    ubicacion: v.location?.name ?? 'sin especificar',\n    url: v.absolute_url\n  }),\n  lever: (v) => ({\n    id_externo: v.id,\n    titulo: v.text,\n    ubicacion: v.categories?.location ?? 'sin especificar',\n    url: v.hostedUrl\n  })\n};\n\nconst salida = [];\n\nrespuestas.forEach((res, i) => {\n  const { empresa, fuente } = empresas[i].json;\n\n  // Greenhouse devuelve { jobs: [...] }, Lever devuelve el array pelado.\n  const vacantes = res.json?.jobs ?? (Array.isArray(res.json) ? res.json : []);\n  if (!mapeo[fuente]) return;\n\n  vacantes.forEach((v) => {\n    const base = mapeo[fuente](v);\n\n    salida.push({\n      json: {\n        ...base,\n        empresa,\n        fuente,\n        // Clave 1: identidad tecnica. Compuesta porque dos empresas\n        // distintas pueden usar el mismo id numerico.\n        clave: `${fuente}:${empresa}:${base.id_externo}`,\n        // Clave 2: huella de contenido. Sobrevive a la republicacion\n        // con id nuevo, que es el churn del que nos queremos proteger.\n        huella: `${empresa}:${base.titulo.toLowerCase().replace(/[^a-z0-9]/g, '')}`,\n        descubierta: hoy,\n        estado: 'nueva'\n      }\n    });\n  });\n});\n\nreturn salida;"
+        "jsCode": "// NORMALIZAR\n// Toda la diferencia entre proveedores vive AQUI y solo aqui.\n\nconst hoy = new Date().toISOString().slice(0, 10);\nconst empresas = $('Leer empresas').all();\nconst respuestas = $input.all();\n\nif (empresas.length !== respuestas.length) {\n  throw new Error(\n    `Desalineacion: ${empresas.length} empresas vs ${respuestas.length} respuestas`\n  );\n}\n\n// Greenhouse devuelve HTML escapado. Lo limpiamos y recortamos:\n// el LLM no necesita 12.000 caracteres para decidir, y los tokens cuestan.\nconst limpiar = (html) => {\n  if (!html) return '';\n  return html\n    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')\n    .replace(/&nbsp;/g, ' ').replace(/&#39;/g, \"'\").replace(/&quot;/g, '\"')\n    .replace(/<[^>]+>/g, ' ')      // fuera etiquetas\n    .replace(/\\s+/g, ' ')          // espacios colapsados\n    .trim()\n    .slice(0, 3500);               // techo duro de contexto\n};\n\nconst mapeo = {\n  greenhouse: (v) => ({\n    id_externo: String(v.id),\n    titulo: v.title,\n    ubicacion: v.location?.name ?? 'sin especificar',\n    url: v.absolute_url,\n    descripcion: limpiar(v.content)\n  }),\n  lever: (v) => ({\n    id_externo: v.id,\n    titulo: v.text,\n    ubicacion: v.categories?.location ?? 'sin especificar',\n    url: v.hostedUrl,\n    descripcion: limpiar(v.descriptionPlain)\n  }),\n  ashby: (v) => ({\n    id_externo: v.id,\n    titulo: v.title,\n    ubicacion: v.location ?? 'sin especificar',\n    url: v.jobUrl,\n    descripcion: limpiar(v.descriptionPlain ?? v.descriptionHtml)\n  })\n};\n\nconst salida = [];\nconst omitidas = [];\n\nrespuestas.forEach((res, i) => {\n  const { empresa, fuente } = empresas[i].json;\n\n  if (!mapeo[fuente]) {\n    omitidas.push(`${empresa}: fuente '${fuente}' sin mapeo`);\n    return;\n  }\n\n  const vacantes = res.json?.jobs ?? (Array.isArray(res.json) ? res.json : []);\n\n  vacantes.forEach((v) => {\n    const base = mapeo[fuente](v);\n\n    if (!base.titulo) {\n      omitidas.push(`${empresa}: vacante ${base.id_externo} sin titulo`);\n      return;\n    }\n\n    salida.push({\n      json: {\n        ...base,\n        empresa,\n        fuente,\n        clave: `${fuente}:${empresa}:${base.id_externo}`,\n        huella: `${empresa}:${base.titulo.toLowerCase().replace(/[^a-z0-9]/g, '')}`,\n        descubierta: hoy,\n        estado: 'nueva'\n      }\n    });\n  });\n});\n\nif (omitidas.length) {\n  console.log(`OMITIDAS (${omitidas.length}):\\n` + omitidas.join('\\n'));\n}\n// Chequeo rapido: si esto sale en 0, el content=true no esta llegando.\nconst conDesc = salida.filter((x) => x.json.descripcion.length > 100).length;\nconsole.log(`Normalizadas: ${salida.length} | con descripcion: ${conDesc}`);\n\nreturn salida;"
       },
-      "id": "a1000000-0000-4000-8000-000000000004",
+      "id": "03e467aa-b4c6-4b24-af99-74480e956d47",
       "name": "Normalizar",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [340, 0]
+      "position": [
+        960,
+        -128
+      ]
     },
     {
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "PEGA_AQUI_EL_ID_DEL_SHEET",
-          "mode": "id"
+          "value": "PEGA_AQUI_EL_ID_DE_TU_SHEET",
+          "mode": "list",
+          "cachedResultName": ""
         },
         "sheetName": {
           "__rl": true,
-          "value": "vacantes",
-          "mode": "name"
+          "value": 386047575,
+          "mode": "list",
+          "cachedResultName": "vacantes"
         },
         "options": {}
       },
-      "id": "a1000000-0000-4000-8000-000000000005",
+      "id": "fdbb0448-ba3d-4c50-ba84-92e2d4c8c165",
       "name": "Leer registro",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [560, 0],
+      "position": [
+        1168,
+        -128
+      ],
       "executeOnce": true,
+      "alwaysOutputData": true,
       "notes": "executeOnce: leemos el registro UNA vez, no una por vacante"
     },
     {
       "parameters": {
-        "jsCode": "// DEDUPLICAR\n// Una vacante es nueva solo si NINGUNA de sus dos claves ya existe.\n// Si la clave no esta en el registro, es de las ultimas 24h:\n// la frescura sale gratis de la deduplicacion, sin guardar historial.\n\nconst registro = $input.all();\n\n// Set en vez de array: la busqueda pasa de O(n) a O(1).\n// Con 3000 filas x 900 vacantes por corrida, la diferencia se nota.\nconst clavesVistas = new Set(registro.map((r) => r.json.clave));\nconst huellasVistas = new Set(registro.map((r) => r.json.huella));\n\nconst nuevas = $('Normalizar').all().filter((v) => {\n  return !clavesVistas.has(v.json.clave) && !huellasVistas.has(v.json.huella);\n});\n\nconsole.log(`Nuevas: ${nuevas.length} de ${$('Normalizar').all().length} revisadas`);\n\nreturn nuevas;"
+        "jsCode": "// DEDUPLICAR\nconst registro = $input.all();\n\n// El item vacio de \"Always Output Data\" llega sin clave.\n// Lo filtramos aqui para que no contamine los sets.\nconst filas = registro.filter((r) => r.json?.clave);\n\n// Set en vez de array: busqueda O(1) en vez de O(n).\nconst clavesVistas = new Set(filas.map((r) => r.json.clave));\nconst huellasVistas = new Set(filas.map((r) => r.json.huella));\n\nconst todas = $('Normalizar').all();\nconst nuevas = todas.filter(\n  (v) => !clavesVistas.has(v.json.clave) && !huellasVistas.has(v.json.huella)\n);\n\nconsole.log(`Registro: ${filas.length} | Revisadas: ${todas.length} | Nuevas: ${nuevas.length}`);\n\nreturn nuevas;"
       },
-      "id": "a1000000-0000-4000-8000-000000000006",
+      "id": "5d386df4-5f99-42f1-998a-d1d0bce76f77",
       "name": "Filtrar nuevas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [780, 0]
+      "position": [
+        1392,
+        -128
+      ],
+      "alwaysOutputData": true
     },
     {
       "parameters": {
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PEGA_AQUI_EL_ID_DEL_SHEET",
-          "mode": "id"
+          "value": "PEGA_AQUI_EL_ID_DE_TU_SHEET",
+          "mode": "list",
+          "cachedResultName": ""
         },
         "sheetName": {
           "__rl": true,
-          "value": "vacantes",
-          "mode": "name"
+          "value": 386047575,
+          "mode": "list",
+          "cachedResultName": "vacantes"
         },
         "columns": {
           "mappingMode": "autoMapInputData",
+          "value": {},
           "matchingColumns": [],
-          "value": {}
+          "schema": [
+            {
+              "id": "clave",
+              "displayName": "clave",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "huella",
+              "displayName": "huella",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titulo",
+              "displayName": "titulo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ubicacion",
+              "displayName": "ubicacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "descubierta",
+              "displayName": "descubierta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "id_externo",
+              "displayName": "id_externo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fuente",
+              "displayName": "fuente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
-      "id": "a1000000-0000-4000-8000-000000000007",
+      "id": "d96d73ab-4fd8-436d-8a72-4915e9353d88",
       "name": "Guardar nuevas",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [1000, 0]
+      "position": [
+        2304,
+        32
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// PREFILTRO — capa 0\n// No descarta: MARCA. Todas se guardan para no perder la deduplicacion.\n\nconst LISTA_BLANCA = [\n  'engineer', 'developer', 'desarrollador', 'ingeniero',\n  'automation', 'automatizacion', 'integration', 'integraciones',\n  'backend', 'full stack', 'fullstack',\n  'python', 'api', 'data', 'ai', 'ml',\n  'software', 'technical', 'solutions', 'platform',\n  'n8n', 'workflow', 'rpa', 'no-code', 'low-code'\n];\n\n// Ubicaciones donde SI eres elegible.\nconst UBIC_FUERTE = ['colombia', 'bogota', 'medellin', 'latam', 'latin america'];\n// Remoto sin pais: ambiguo, pasa y lo resuelve la capa 1 leyendo la descripcion.\nconst UBIC_AMBIGUA = ['remote', 'remoto', 'anywhere', 'global', 'worldwide', 'americas'];\n// Excepcion consciente al principio de \"lista blanca\": estos paises aparecen\n// como \"Remote - X\" y son remotos pero no contratan desde Colombia.\n// Es lista negra a proposito y por eso NO descarta sola: solo aplica cuando\n// la ubicacion no matcheo antes contra UBIC_FUERTE.\nconst UBIC_BLOQUEO = [\n  'united states', 'usa', 'canada', 'united kingdom',\n  'brazil', 'brasil', 'mexico', 'argentina', 'chile', 'peru',\n  'india', 'turkey', 'turkiye', 'europe', 'germany', 'spain', 'poland'\n];\n// Siglas: se comparan con limite de palabra para no pegar dentro de otra\n// (sin esto 'uk' matchea \"Ukraine\" y 'us' matchea \"ustedes\", \"industry\"...).\nconst UBIC_BLOQUEO_SIGLAS = ['us', 'uk', 'eu', 'emea'];\n\n// Quita tildes y baja a minusculas: \"Medellín\" y \"medellin\" deben ser lo mismo.\nconst norm = (t) =>\n  (t ?? '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n\n// Compara con limite de palabra. Sin esto 'api' matchea \"therAPIst\",\n// 'ml' matchea \"htML\" y 'ai' matchea \"chAIr\": basura que pasa el filtro.\nconst escapar = (t) => t.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\nconst contiene = (texto, termino) =>\n  new RegExp(`\\\\b${escapar(termino)}\\\\b`).test(texto);\nconst contieneAlguno = (texto, lista) => lista.some((t) => contiene(texto, t));\n\nlet pasan = 0;\n\nconst salida = $input.all().map((item) => {\n  const titulo = norm(item.json.titulo);\n  const ubic = norm(item.json.ubicacion);\n\n  const tituloOk = contieneAlguno(titulo, LISTA_BLANCA);\n\n  let ubicOk, notaUbic;\n  if (contieneAlguno(ubic, UBIC_FUERTE)) {\n    ubicOk = true;  notaUbic = 'ubicacion compatible';\n  } else if (contieneAlguno(ubic, UBIC_BLOQUEO) ||\n             contieneAlguno(ubic, UBIC_BLOQUEO_SIGLAS)) {\n    ubicOk = false; notaUbic = 'jurisdiccion incompatible';\n  } else if (contieneAlguno(ubic, UBIC_AMBIGUA)) {\n    ubicOk = true;  notaUbic = 'remoto sin pais, revisar en capa 1';\n  } else {\n    ubicOk = false; notaUbic = 'ubicacion no reconocida';\n  }\n\n  const pasa = tituloOk && ubicOk;\n  if (pasa) pasan++;\n\n  return {\n    json: {\n      ...item.json,\n      prefiltro: pasa ? 'si' : 'no',\n      motivo: pasa ? notaUbic : (!tituloOk ? 'titulo fuera de perfil' : notaUbic)\n    }\n  };\n});\n\nconsole.log(`Prefiltro: ${pasan} de ${salida.length} pasan`);\n\nreturn salida;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        -128
+      ],
+      "id": "fb159663-585d-46bc-b894-70c799b5173a",
+      "name": "Prefiltro"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5f86d8ea-8a83-4fc7-ae13-fd24df903a84",
+              "leftValue": "={{ $json.prefiltro }}",
+              "rightValue": "si",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1808,
+        -128
+      ],
+      "id": "d47a07c0-54ce-441a-a6c3-688b27cce84c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "// SCORING 2a — determinista, sin LLM.\n// Todo lo que se puede medir buscando texto, se mide aqui.\n\nconst PERFIL = {\n  stack_fuerte: ['n8n', 'python', 'rest api', 'api', 'webhook', 'llm', 'openai',\n                 'anthropic', 'prompt', 'automation', 'automatizacion', 'integration'],\n  stack_solido: ['javascript', 'fastapi', 'git', 'postman', 'sql', 'mysql', 'sqlite'],\n  stack_basico: ['typescript', 'html', 'css', 'docker', 'railway'],\n  sectores: ['construction', 'construccion', 'insurance', 'insurtech', 'seguros',\n             'logistics', 'logistica', 'supply chain', 'customs', 'trade',\n             'food', 'manufacturing', 'fintech'],\n  anos_dev: 2\n};\n\n// Un match perfecto contra tu stack ronda 25 puntos brutos.\n// Dividir por esa referencia estira la escala: antes bastaban 5 terminos\n// fuertes para topar en 10 y toda vacante de backend empataba arriba.\nconst BRUTO_DE_REFERENCIA = 25;\n\nconst norm = (t) => (t ?? '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n\n// Limite de palabra obligatorio: sin el, 'api' matchea \"therAPIst\",\n// 'ml' matchea \"htML\" y 'ai' matchea \"chAIr\".\nconst escapar = (t) => t.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\nconst contar = (texto, lista) =>\n  lista.filter((t) => new RegExp(`\\\\b${escapar(t)}\\\\b`).test(texto)).length;\n\nreturn $input.all().map((item) => {\n  const texto = norm(item.json.titulo + ' ' + (item.json.descripcion ?? ''));\n  const titulo = norm(item.json.titulo);\n  const banderas = [];\n\n  // --- STACK: pesos distintos segun dominio real ---\n  const f = contar(texto, PERFIL.stack_fuerte);\n  const s = contar(texto, PERFIL.stack_solido);\n  const b = contar(texto, PERFIL.stack_basico);\n  const bruto = f * 2 + s * 1 + b * 0.5;\n  const stack = Math.min(10, Math.round((bruto / BRUTO_DE_REFERENCIA) * 100) / 10);\n\n  // --- SENIORITY: el titulo manda ---\n  // 'junior' no vale mas que 'mid': con 25 anos de trayectoria un internship\n  // no es mejor match que un mid, solo es mas facil de conseguir.\n  let seniority = 5;\n  if (/\\b(junior|jr\\.?|entry[- ]level|trainee)\\b/.test(titulo)) seniority = 9;\n  else if (/\\b(intern|internship)\\b/.test(titulo)) seniority = 4;\n  else if (/\\b(ii|mid|mid[- ]level|semi[- ]?senior)\\b/.test(titulo)) seniority = 10;\n  else if (/\\b(senior|sr\\.?|iii)\\b/.test(titulo)) seniority = 4;\n  if (/\\b(staff|principal|lead|architect|head of|director|manager|vp)\\b/.test(titulo)) {\n    seniority = 0;\n    banderas.push('KNOCKOUT: seniority fuera de alcance');\n  }\n\n  // --- CONTEXTO DE NEGOCIO: tu diferenciador real ---\n  const contexto = Math.min(10, contar(texto, PERFIL.sectores) * 4);\n\n  // --- ANOS: marca brecha, no descarta. La evidencia puede compensar. ---\n  // Buscamos TODAS las apariciones y nos quedamos con la menor: una oferta que\n  // dice \"5 years in business ... 2 years of experience\" pide 2, no 5.\n  const pedidos = [...texto.matchAll(/(\\d{1,2})\\s*\\+?\\s*(?:years?|yrs?|anos)\\b(?![^.]{0,40}\\b(?:in business|of history|founded)\\b)/g)]\n    .map((m) => parseInt(m[1], 10))\n    .filter((n) => n > 0 && n <= 20);\n  if (pedidos.length) {\n    const min = Math.min(...pedidos);\n    if (min > PERFIL.anos_dev) {\n      banderas.push(`BRECHA: piden ${min} anos, tienes ${PERFIL.anos_dev}`);\n    }\n  }\n\n  // --- INGLES: marca riesgo de entrevista, NUNCA descarta ---\n  if (/fluent english|advanced english|english.{0,10}c[12]|native english|excellent (written and )?(verbal )?english/.test(texto)) {\n    banderas.push('RIESGO: exigen ingles alto');\n  }\n\n  // --- KNOCKOUTS DUROS ---\n  // Solo patrones inequivocos. Un knockout por substring sobre 3500 caracteres\n  // mata vacantes remotas que apenas mencionan una oficina: falso negativo caro.\n  if (/\\b(authorized to work in|work authorization|must be (?:a )?(?:us|u\\.s\\.) (?:citizen|resident)|must reside in the (?:united states|us|uk))\\b/.test(texto)) {\n    banderas.push('KNOCKOUT: exige autorizacion laboral');\n  }\n  if (/\\b(commission[- ]only|solo comision)\\b/.test(texto)) {\n    banderas.push('KNOCKOUT: solo comision');\n  }\n\n  // Presencial: RIESGO, no KNOCKOUT. Se degrada a knockout solo con\n  // una exigencia explicita de presencia. La capa 2b lo confirma leyendo.\n  const remotoExplicito = /\\b(fully remote|100% remote|remote[- ]first|work from anywhere|fully distributed)\\b/.test(texto);\n  const presencialDuro = /\\b(?:\\d+ days? (?:per|a) week (?:in|at) the office|must (?:be able to )?relocate|required to work on[- ]?site|on[- ]?site position|this is (?:a |an )?(?:hybrid|on[- ]?site) (?:role|position))\\b/.test(texto);\n  const presencialBlando = /\\b(on[- ]?site|in[- ]?office|hybrid|relocation)\\b/.test(texto);\n\n  if (presencialDuro && !remotoExplicito) {\n    banderas.push('KNOCKOUT: presencial o hibrido exigido');\n  } else if (presencialBlando && !remotoExplicito) {\n    banderas.push('RIESGO: menciona presencial/hibrido, confirmar en la descripcion');\n  }\n\n  const esKnockout = banderas.some((x) => x.startsWith('KNOCKOUT'));\n\n  // Ponderacion: el stack pesa mas que todo lo demas junto.\n  const puntaje = esKnockout\n    ? 0\n    : Math.round((stack * 0.5 + seniority * 0.3 + contexto * 0.2) * 10) / 10;\n\n  return {\n    json: {\n      ...item.json,\n      puntaje,\n      desglose: `stack ${stack.toFixed(1)} (bruto ${bruto.toFixed(1)}) | seniority ${seniority} | contexto ${contexto}`,\n      banderas: banderas.join(' || ') || 'sin banderas'\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2096,
+        -144
+      ],
+      "id": "00d960cb-a0c4-4bb5-9717-04faade087f8",
+      "name": "Puntuar"
     }
   ],
   "connections": {
     "Cada dia 6am": {
-      "main": [[{ "node": "Leer empresas", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Leer empresas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Leer empresas": {
-      "main": [[{ "node": "Consultar ATS", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Consultar ATS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Consultar ATS": {
-      "main": [[{ "node": "Normalizar", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Normalizar": {
-      "main": [[{ "node": "Leer registro", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Leer registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Leer registro": {
-      "main": [[{ "node": "Filtrar nuevas", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Filtrar nuevas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Filtrar nuevas": {
-      "main": [[{ "node": "Guardar nuevas", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Prefiltro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefiltro": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Puntuar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar nuevas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Puntuar": {
+      "main": [
+        [
+          {
+            "node": "Guardar nuevas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  },
-  "pinData": {}
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
 }

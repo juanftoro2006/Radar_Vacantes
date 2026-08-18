@@ -1,0 +1,229 @@
+{
+  "_nota": "PLANTILLA DE EJEMPLO. Copia a perfil.json y reemplaza con tus datos. perfil.json esta en .gitignore.",
+  "identidad": {
+    "nombre": "Nombre Apellido",
+    "rol_objetivo": "Tu rol objetivo",
+    "ubicacion": "Tu pais",
+    "modalidad": [
+      "remoto"
+    ]
+  },
+  "stack": {
+    "fuerte": [
+      "n8n",
+      "Python",
+      "REST APIs",
+      "webhooks",
+      "LLM APIs",
+      "prompt engineering",
+      "automatización de flujos"
+    ],
+    "solido": [
+      "JavaScript",
+      "FastAPI",
+      "Git",
+      "Postman",
+      "SQLite",
+      "MySQL"
+    ],
+    "basico": [
+      "TypeScript",
+      "HTML/CSS",
+      "Docker",
+      "Railway"
+    ]
+  },
+  "experiencia": {
+    "anos_como_dev": 2,
+    "anos_profesionales_totales": 25,
+    "_decision": "Los 25 anos son como emprendedor y director de proyectos, no como dev. NO entran al knockout: se usan como dimension 'contexto_negocio' del scoring."
+  },
+  "idiomas": {
+    "espanol": "nativo",
+    "ingles": {
+      "actual": "B1-B2",
+      "meta": "B2",
+      "en_estudio": true
+    }
+  },
+  "evidencia": [
+    {
+      "nombre": "Proyecto 1",
+      "demuestra": [
+        "capacidad A",
+        "capacidad B"
+      ]
+    },
+    {
+      "nombre": "Proyecto 2",
+      "demuestra": [
+        "capacidad C"
+      ]
+    }
+  ],
+  "resumen_cv": {
+    "_uso": "Texto para redactar postulaciones. NO se usa para filtrar.",
+    "linea_1": "Una linea sobre lo que construyes.",
+    "linea_2": "Una linea sobre tu contexto no tecnico, si lo tienes."
+  },
+  "contexto_negocio": {
+    "_uso": "Dimensión de scoring. Si la empresa opera en uno de estos sectores, sube el puntaje: entiendes su operación sin curva de aprendizaje.",
+    "sectores": [
+      "construcción",
+      "construcción industrial",
+      "seguros",
+      "insurtech",
+      "comercio internacional",
+      "logística",
+      "aduanas",
+      "alimentos",
+      "manufactura"
+    ],
+    "capacidad": "levantar y documentar procesos operativos antes de automatizarlos"
+  },
+  "prefiltro": {
+    "_estrategia": "LISTA BLANCA. El conjunto de lo que sirve es chico y conocido; el de lo que no sirve es infinito. Generosa a proposito: un falso positivo cuesta una llamada al LLM, un falso negativo cuesta una oportunidad.",
+    "_comparacion": "Se compara con limite de palabra (\\b), no con substring: 'api' no debe matchear 'therapist'.",
+    "titulo_incluye": [
+      "engineer",
+      "developer",
+      "desarrollador",
+      "ingeniero",
+      "automation",
+      "automatizacion",
+      "integration",
+      "integraciones",
+      "backend",
+      "full stack",
+      "fullstack",
+      "python",
+      "api",
+      "data",
+      "ai",
+      "ml",
+      "software",
+      "technical",
+      "solutions",
+      "platform",
+      "n8n",
+      "workflow",
+      "rpa",
+      "no-code",
+      "low-code"
+    ],
+    "ubicacion_fuerte": [
+      "colombia",
+      "bogota",
+      "medellin",
+      "latam",
+      "latin america"
+    ],
+    "ubicacion_ambigua": [
+      "remote",
+      "remoto",
+      "anywhere",
+      "global",
+      "worldwide",
+      "americas"
+    ],
+    "ubicacion_bloqueo": [
+      "united states",
+      "usa",
+      "canada",
+      "united kingdom",
+      "brazil",
+      "brasil",
+      "mexico",
+      "argentina",
+      "chile",
+      "peru",
+      "india",
+      "turkey",
+      "turkiye",
+      "europe",
+      "germany",
+      "spain",
+      "poland"
+    ],
+    "ubicacion_bloqueo_siglas": [
+      "us",
+      "uk",
+      "eu",
+      "emea"
+    ],
+    "_excepcion_lista_negra": "ubicacion_bloqueo es lista NEGRA, contra el principio general. Es deliberado: 'Remote - Brazil' es remota pero no contrata desde Colombia. Solo aplica cuando la ubicacion no matcheo antes contra ubicacion_fuerte, y su agujero cae del lado barato (pasa de mas, no de menos)."
+  },
+  "knockout": {
+    "_regla": "Binario. Si pega alguna, puntaje 0.",
+    "_criterio": "Solo patrones inequivocos. Un knockout por substring sobre 3500 caracteres de descripcion produce falsos negativos caros.",
+    "descartar_si": [
+      "exige autorizacion laboral en US/UK/EU",
+      "pago solo por comision",
+      "seniority Staff, Principal, Lead, Architect o superior",
+      "exigencia explicita de presencialidad (N dias en oficina, obligacion de reubicarse)"
+    ]
+  },
+  "no_descarta_pero_marca": {
+    "ingles": "Entrevista tecnica en ingles -> RIESGO, no descarta.",
+    "anos": "Piden mas anos de los que tienes como dev -> BRECHA, no descarta. La evidencia compensa.",
+    "presencial_ambiguo": "Menciona oficina/hibrido sin exigirlo -> RIESGO. La capa 2b lo confirma leyendo."
+  },
+  "scoring": {
+    "_uso": "Espejo del nodo Puntuar. Pesos: stack 0.5, seniority 0.3, contexto 0.2.",
+    "bruto_de_referencia": 25,
+    "_por_que": "El stack bruto se divide por 25 en vez de recortarse en 10. Con el techo viejo bastaban 5 terminos fuertes para topar, y toda vacante de backend empataba arriba.",
+    "stack_fuerte": [
+      "n8n",
+      "python",
+      "rest api",
+      "api",
+      "webhook",
+      "llm",
+      "openai",
+      "anthropic",
+      "prompt",
+      "automation",
+      "automatizacion",
+      "integration"
+    ],
+    "stack_solido": [
+      "javascript",
+      "fastapi",
+      "git",
+      "postman",
+      "sql",
+      "mysql",
+      "sqlite"
+    ],
+    "stack_basico": [
+      "typescript",
+      "html",
+      "css",
+      "docker",
+      "railway"
+    ],
+    "sectores": [
+      "construction",
+      "construccion",
+      "insurance",
+      "insurtech",
+      "seguros",
+      "logistics",
+      "logistica",
+      "supply chain",
+      "customs",
+      "trade",
+      "food",
+      "manufacturing",
+      "fintech"
+    ],
+    "seniority": {
+      "mid": 10,
+      "junior": 9,
+      "sin_marca": 5,
+      "senior": 4,
+      "intern": 4,
+      "lead_o_superior": 0
+    }
+  }
+}
