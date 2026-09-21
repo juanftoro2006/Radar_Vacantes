@@ -1,76 +1,66 @@
-# Esquema de las hojas
+# Esquema de datos
 
-El nodo `Guardar nuevas` usa `autoMapInputData`: **los encabezados del Sheet deben llamarse exactamente igual que las claves del JSON.** Si un encabezado no coincide, esa columna se guarda vacía sin error.
+## `config/empresas.csv`: fuentes a consultar
 
----
+| Columna | Ejemplo | Notas |
+|---|---|---|
+| `empresa` | `Nubank` | Nombre legible. Solo para mostrar |
+| `fuente` | `ashby` | `greenhouse` \| `lever` \| `ashby`. Elige URL y mapeo en `radar/fuentes.py` |
+| `token` | `nubank` | Identificador en el ATS. Entra en `clave` y `huella` |
+| `activa` | `si` | `no` la desactiva sin borrarla (queda el porqué en `nota`) |
+| `nota` | `se mudo de Greenhouse a Ashby` | Libre |
 
-## Hoja `empresas` — fuentes a consultar
+La URL del feed ya no vive en la hoja: es estructura del ATS, no un valor por empresa.
 
-La genera `verificar_tokens.py`. Se importa a mano.
+## `config/radar.json`: qué cuenta como encaje
 
-| Col | Campo | Ejemplo | Notas |
-|---|---|---|---|
-| A | `empresa` | `Sezzle` | Nombre legible. Entra en `clave` y `huella` |
-| B | `fuente` | `greenhouse` | `greenhouse` \| `lever` \| `ashby`. Elige el mapeo en Normalizar |
-| C | `token` | `sezzle` | Identificador de la empresa en el ATS |
-| D | `plantilla_url` | `https://boards-api.greenhouse.io/v1/boards/{t}/jobs?content=true` | `{t}` se sustituye por el token |
+Única fuente de verdad de listas, pesos y umbrales. Se valida con pydantic al arrancar (`radar/config.py`): un campo faltante o pesos que no suman 1 detienen la corrida con un mensaje claro. Las claves que empiezan con `_` son comentarios.
 
----
+## `data/vacantes.csv`: registro completo
 
-## Hoja `vacantes` — registro completo
+Se guarda **todo** lo descargado, pase o no el filtro.
 
-**16 columnas, A–P.** Se guarda todo (incluso lo descartado por el prefiltro): el registro sirve a la deduplicación, el puntaje sirve a la decisión.
+| Columna | Lo escribe | Notas |
+|---|---|---|
+| `n` | pipeline | Número corto y estable. Es el que usas en `/visto 12` |
+| `clave` | pipeline | `fuente:token:id_externo`. **Dedup 1** |
+| `huella` | pipeline | `token:titulo_normalizado`. **Dedup 2**, ventana de 30 días entre avisos |
+| `empresa`, `fuente`, `token`, `id_externo` | fuentes | |
+| `titulo`, `ubicacion`, `url` | fuentes | Ubicaciones múltiples unidas con ` / ` |
+| `publicada` | fuentes | ISO 8601 del ATS. Vacía si el ATS no la da (nunca inventada) |
+| `descubierta` | pipeline | ISO 8601, hora Bogotá. Primera vez que el radar la vio |
+| `cerrada` | pipeline | Fecha en que desapareció del feed (solo si la fuente respondió bien) |
+| `prefiltro` | prefiltro | `si` \| `no` |
+| `motivo` | prefiltro | Siempre explica la decisión |
+| `tipo_rol` | puntaje | `desarrollo` \| `automatizacion`: decide la escala de seniority |
+| `puntaje` | puntaje | 0–10. **Vacío = no se evaluó. Cero = evaluada y descartada** |
+| `desglose` | puntaje | `stack X (bruto Y) \| seniority Z (nivel, tipo) \| contexto W` |
+| `banderas` | puntaje | `KNOCKOUT` / `BRECHA` / `RIESGO`, separadas por ` \|\| ` |
+| `estado` | pipeline / tú | `nueva` \| `vista` (con `/visto`) \| `duplicada` |
+| `notificada` | pipeline | Cuándo se avisó por Telegram. Vacía = no avisada (se reintenta) |
 
-| Col | Campo | Lo escribe | Notas |
-|---|---|---|---|
-| A | `id_externo` | Normalizar | ID en el ATS. No es único entre empresas |
-| B | `titulo` | Normalizar | |
-| C | `ubicacion` | Normalizar | `sin especificar` si el feed no la trae |
-| D | `url` | Normalizar | Enlace a la vacante |
-| E | `descripcion` | Normalizar | HTML limpio, tope 3500 caracteres |
-| F | `empresa` | Normalizar | |
-| G | `fuente` | Normalizar | |
-| H | `clave` | Normalizar | `fuente:empresa:id_externo` — **dedup 1** |
-| I | `huella` | Normalizar | `empresa:titulo_normalizado` — **dedup 2**, sobrevive a republicación |
-| J | `descubierta` | Normalizar | `AAAA-MM-DD`. Fecha de detección, no de publicación |
-| K | `estado` | Normalizar | `nueva`. Se edita a mano al postular |
-| L | `prefiltro` | Prefiltro | `si` \| `no` |
-| M | `motivo` | Prefiltro | Por qué pasó o por qué no |
-| N | `puntaje` | Puntuar | 0–10. **Vacío = no se evaluó. Cero = evaluada y descartada.** No son lo mismo |
-| O | `desglose` | Puntuar | `stack X (bruto Y) \| seniority Z \| contexto W` |
-| P | `banderas` | Puntuar | `KNOCKOUT` / `BRECHA` / `RIESGO`, separadas por `\|\|` |
+La descripción **no** se guarda: se lee completa en memoria para puntuar y se descarta. Para releerla está la `url`.
 
-Las que no pasan el prefiltro llegan por la rama falsa del `If` y se guardan **sin** N, O ni P. Esas celdas quedan vacías a propósito.
+## Regla de candidata
 
----
-
-## Hoja `candidatas` — vista filtrada
-
-No es un nodo del flujo: es presentación, y la presentación no se paga con un paso de pipeline.
-
-Fórmula en `A1` (deja la hoja vacía, la fórmula expande sola):
+Todo en `radar/pipeline.py::es_candidata`:
 
 ```
-=SORT(
-  FILTER(
-    {vacantes!N2:N, vacantes!B2:B, vacantes!F2:F, vacantes!C2:C, vacantes!P2:P, vacantes!D2:D, vacantes!J2:J},
-    (vacantes!L2:L="si") * (vacantes!N2:N>=5) * (vacantes!N2:N<>"")
-  ),
-  1, FALSE
-)
+prefiltro = si
+y puntaje >= umbral (5.0)
+y sin KNOCKOUT
+y no cerrada
+y estado = nueva
+y publicada (o descubierta, si no hay fecha) hace <= 7 dias
 ```
 
-Devuelve: puntaje, título, empresa, ubicación, banderas, url, fecha — ordenado por puntaje descendente.
+Después, entre las candidatas no avisadas, la huella decide: si la misma empresa ya avisó el mismo título hace menos de 30 días, la nueva queda `duplicada`.
 
-**Por qué `N<>""` además de `N>=5`:** una celda vacía se compara como 0 en algunas condiciones y puede colarse. Es la traducción literal de "celda vacía no es cero".
+## `data/estado.json`: estado del bot
 
-**Si sale `#N/A`:** ninguna fila cumple. Diagnostica una condición a la vez antes de tocar la fórmula:
-
-```
-=CONTAR.SI(vacantes!L2:L; "si")      → cuántas pasan el prefiltro
-=CONTAR.SI(vacantes!N2:N; ">=5")     → cuántas superan el umbral
-```
-
-Si la primera da 0, el problema está en el prefiltro. Si la segunda da 0, baja el umbral. **Nunca cambies la fórmula al azar: mide primero.**
-
-**Si cambias las columnas de `vacantes`, esta fórmula se rompe** — las letras se corren. Actualiza esta tabla en el mismo commit.
+| Campo | Para qué |
+|---|---|
+| `telegram_offset` | Último mensaje de Telegram procesado; evita aplicar un `/visto` dos veces |
+| `ultimo_resumen` | Fecha (Bogotá) del último resumen diario |
+| `ultima_corrida` | Marca de tiempo de la última corrida |
+| `fuentes` | Por token: `ok`, `detalle` y `desde` cuándo está en ese estado |

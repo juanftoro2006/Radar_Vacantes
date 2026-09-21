@@ -1,0 +1,120 @@
+{
+  "_nota": "Unica fuente de verdad del radar. El codigo lee este archivo; las listas no existen en ninguna otra parte. Cambiar un valor aqui no requiere tocar codigo.",
+
+  "perfil": {
+    "anos_dev": 2,
+    "ciudad_base": "medellin"
+  },
+
+  "prefiltro": {
+    "_estrategia": "LISTA BLANCA, generosa a proposito: un falso positivo cuesta una lectura, un falso negativo cuesta una oportunidad.",
+    "_comparacion": "Terminos de 3 letras o menos (ai, ml, api, rpa, n8n) se comparan con limite de palabra en ambos lados. Los demas son raices: 'engineer' tambien pega en 'engineering', 'integration' en 'integrations'.",
+    "titulo_incluye": [
+      "engineer", "developer", "desarrollador", "ingeniero", "programador",
+      "automation", "automatizacion", "integration", "integraciones",
+      "implementation", "implementacion",
+      "backend", "full stack", "fullstack",
+      "python", "api", "data", "ai", "ml",
+      "software", "technical", "solutions", "soluciones", "platform",
+      "n8n", "workflow", "rpa", "no-code", "low-code"
+    ],
+    "ubicacion": {
+      "_regla": "Una ubicacion pasa si algun segmento (separados por ; / |) nombra un lugar de 'fuerte', o si es remoto puro: al quitarle las palabras de 'remoto', 'region_permitida' y 'relleno' no queda ningun nombre de lugar. 'Remote, Global' pasa; 'Sweden (Remote)' no.",
+      "fuerte": [
+        "colombia", "bogota", "medellin", "cali", "barranquilla",
+        "latam", "latin america", "latinoamerica", "south america", "sudamerica"
+      ],
+      "remoto": [
+        "remote", "remoto", "remota", "anywhere", "global", "worldwide",
+        "home based", "home-based", "flexible", "distributed", "work from home", "teletrabajo"
+      ],
+      "region_permitida": ["americas", "amer"],
+      "relleno": [
+        "in", "the", "of", "based", "only", "world", "time", "zone", "zones", "timezone", "timezones",
+        "friendly", "any", "location", "locations", "multiple", "home", "first", "team",
+        "de", "en", "y", "and"
+      ]
+    }
+  },
+
+  "puntaje": {
+    "pesos": { "stack": 0.5, "seniority": 0.3, "contexto": 0.2 },
+    "bruto_de_referencia": 25,
+    "_bruto": "Un encaje perfecto de stack ronda 25 puntos brutos. stack = bruto / 25 * 10, con tope 10.",
+    "piso_stack": 2.0,
+    "_piso": "Si el stack no llega al piso, KNOCKOUT con bandera visible: seniority y sector no miden si sabes hacer el trabajo.",
+    "umbral": 5.0,
+    "puntos_por_sector": 4,
+
+    "stack": {
+      "_conteo": "Cada termino cuenta una vez. Los terminos largos se evaluan primero y su texto se retira: 'rest api' no vuelve a contar como 'api', 'node.js' no vuelve a contar como 'node'.",
+      "fuerte": {
+        "peso": 2,
+        "terminos": [
+          "n8n", "python", "rest api", "api", "webhook", "llm", "openai", "anthropic",
+          "prompt", "automation", "automatizacion", "integration", "workflow automation",
+          "orchestration", "etl", "zapier", "make.com", "agent", "rag"
+        ]
+      },
+      "solido": {
+        "peso": 1,
+        "terminos": [
+          "javascript", "node.js", "nodejs", "node", "fastapi", "git", "postman",
+          "sql", "mysql", "sqlite", "postgres", "postgresql", "whatsapp"
+        ]
+      },
+      "basico": {
+        "peso": 0.5,
+        "terminos": ["typescript", "html", "css", "docker", "railway"]
+      }
+    },
+
+    "sectores": [
+      "construction", "construccion", "insurance", "insurtech", "seguros",
+      "logistics", "logistica", "supply chain", "freight", "shipping", "customs",
+      "trade", "trading", "brokerage", "broker", "futures",
+      "payments", "banking", "fintech",
+      "food", "manufacturing", "industrial"
+    ],
+
+    "tipo_rol": {
+      "_regla": "Si el titulo nombra alguno de estos terminos, el rol es de automatizacion/operaciones y se usa esa escala de seniority. Si no, desarrollo.",
+      "automatizacion": [
+        "automation", "automatizacion", "integration", "integraciones",
+        "solutions", "soluciones", "implementation", "implementacion",
+        "workflow", "rpa", "no-code", "low-code", "n8n", "zapier",
+        "operations", "operaciones", "ops", "business systems", "process", "procesos",
+        "enablement", "forward deployed"
+      ]
+    },
+
+    "seniority": {
+      "_regla": "puntos 0-10. knockout=true descarta. brecha=true marca sin descartar.",
+      "desarrollo": {
+        "top":       { "knockout": true },
+        "lead":      { "knockout": true },
+        "senior":    { "puntos": 3, "brecha": true },
+        "mid":       { "puntos": 10 },
+        "junior":    { "puntos": 9 },
+        "intern":    { "puntos": 4 },
+        "sin_marca": { "puntos": 6 }
+      },
+      "automatizacion": {
+        "top":       { "knockout": true },
+        "lead":      { "puntos": 4, "brecha": true },
+        "senior":    { "puntos": 8 },
+        "mid":       { "puntos": 10 },
+        "junior":    { "puntos": 8 },
+        "intern":    { "puntos": 4 },
+        "sin_marca": { "puntos": 10 }
+      }
+    }
+  },
+
+  "candidatas": {
+    "ventana_dias": 7,
+    "_ventana": "Solo se avisa lo publicado hace 7 dias o menos. Lo mas viejo se registra pero no se alerta.",
+    "huella_dias": 30,
+    "_huella": "Si la misma empresa ya aviso el mismo titulo hace menos de 30 dias, la nueva se marca 'duplicada' (queda registrada, no se alerta)."
+  }
+}

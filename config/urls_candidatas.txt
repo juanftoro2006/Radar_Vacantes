@@ -1,0 +1,10 @@
+# Pega aqui URLs de paginas de empleo (una por linea) y corre: python verificar_tokens.py
+# Hosts soportados: job-boards.greenhouse.io, boards.greenhouse.io, jobs.lever.co, jobs.ashbyhq.com
+#
+# Probadas el 2026-09-21 SIN exito en esos tres ATS (probablemente usan otro:
+# Workday, SmartRecruiters, Teamtailor...): rappi, kavak, mercadolibre, platzi,
+# konfio, truora, habi, tul, jeeves, bold, merqueo, frubana, chiper, nowports,
+# cabify, belvo (Ashby responde, pero sin vacantes para Colombia).
+#
+# Ejemplo:
+# https://jobs.ashbyhq.com/n8n

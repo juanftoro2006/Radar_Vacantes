@@ -1,0 +1,34 @@
+{
+ "jobs": [
+  {
+   "id": 900011,
+   "title": "Fraud Automation Analyst",
+   "location": {
+    "name": "Latin America"
+   },
+   "absolute_url": "https://job-boards.greenhouse.io/ejemplo/jobs/900011",
+   "first_published": "2026-09-21T09:00:00-05:00",
+   "content": "&lt;p&gt;Automate fraud review workflows with Python, SQL and REST APIs.&lt;/p&gt;&lt;p&gt;Build integrations and webhooks between our payments platform and vendors.&lt;/p&gt;&lt;p&gt;Use LLM prompts to classify cases. Node.js is a plus. 2+ years of experience.&lt;/p&gt;"
+  },
+  {
+   "id": 900012,
+   "title": "Fraud Automation Analyst",
+   "location": {
+    "name": "Bogota, Colombia"
+   },
+   "absolute_url": "https://job-boards.greenhouse.io/ejemplo/jobs/900012",
+   "first_published": "2026-09-21T09:00:00-05:00",
+   "content": "&lt;p&gt;Automate fraud review workflows with Python, SQL and REST APIs.&lt;/p&gt;&lt;p&gt;Build integrations and webhooks between our payments platform and vendors.&lt;/p&gt;&lt;p&gt;Use LLM prompts to classify cases. Node.js is a plus. 2+ years of experience.&lt;/p&gt;"
+  },
+  {
+   "id": 900013,
+   "title": "Principal Infrastructure Engineer",
+   "location": {
+    "name": "Bogota, Colombia"
+   },
+   "absolute_url": "https://job-boards.greenhouse.io/ejemplo/jobs/900013",
+   "first_published": "2026-09-21T09:00:00-05:00",
+   "content": "&lt;p&gt;Python, APIs, automation, Docker, SQL. 10 years of experience.&lt;/p&gt;"
+  }
+ ]
+}

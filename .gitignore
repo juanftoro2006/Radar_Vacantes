@@ -1,14 +1,17 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 .vscode/
 
-# Datos personales: perfil real y empresas objetivo
+# Perfil real (identidad, evidencia, textos de postulacion). Se publica solo perfil.ejemplo.json
 perfil.json
-empresas.csv
+
+# Legado v1: el empresas.csv de la raiz lo generaba la version anterior.
+# El de config/ SI se versiona (el patron con / solo aplica a la raiz).
+/empresas.csv
 
 # Exports crudos de n8n: traen ID de Sheet y credenciales.
-# El export saneado se versiona como workflow.json
 credenciales*.json
 Radar de Vacantes.json
 *.export.json

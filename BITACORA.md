@@ -211,72 +211,169 @@ Las descripciones vienen de feeds públicos de ATS — **entrada no confiable**.
 4. Arreglar el trigger (cada hora → 6am) y actualizar el README
 5. Después: capa 2b
 
-## 2026-08-18 (tarde) — Recuperación del flujo, migración del repo y primera medición
 
-**Objetivo:** aplicar en n8n el prefiltro y el scoring corregidos en la mañana, y correr para medir contra el baseline de 71 de 249.
+## 2026-08-19 (tarde) — Cuatro bugs de scoring, ventana de 48h y 10 fuentes
 
-\---
+**Objetivo:** entender por qué el radar traía sábana y nada útil, y depurar hasta tener una lista corta que sirva.
+
+---
 
 **Construido:**
 
-* Flujo de n8n restaurado y funcionando de punta a punta (10 nodos, 18s, sin errores)
-* Repo movido a `C:\\PROYECTOS\\AUTOMATIZACIONES\\NoA-radar\_vacantes`
-* Fórmula de la vista `candidatas` corregida
-* `Puntuar` corregido pegado en el flujo real (sin ejecutar todavía)
+- **`verificar_tokens.py`**: se probaron 29 tokens candidatos. Sobrevivieron 6 nuevos → **10 fuentes** (antes 4): `remotecom` (215), `clara` (103), `bitso` (9), `nubank` (0, board válido sin ofertas hoy), `mural` (ashby, 10), `runa` (ashby, 2). Primeras fuentes no-Greenhouse del proyecto. De ~250 a **628 vacantes**.
+- **Nodo `Puntuar`** — cuatro correcciones y un piso nuevo.
+- **Vista `candidatas`** — reescrita con ventana de frescura.
+- **Hoja `vacantes`** — columna `R` (`antiguedad_dias`) creada como encabezado, **deliberadamente sin usar**.
 
-\---
+---
 
-**Problemas y causa raíz:**
+**Los cuatro bugs del scoring, todos encontrados leyendo datos reales:**
 
-* *El workflow de n8n se perdió.* Se eliminó el flujo que funcionaba y se importó `workflow.json` — el export público, sin ID de Sheet ni credenciales. Causa raíz: no se releyó el pendiente 1 del propio `ESTADO.md`, que advertía explícitamente contra reimportar. **Documentación que no se relee no sirve de nada.** Recuperado gracias a `Radar de Vacantes.json` (export con credenciales, bloqueado por `.gitignore`) — la separación entre export publicable y export ejecutable, tomada esa misma mañana, fue lo que hizo que costara minutos y no una tarde.
-* *La credencial de Google Sheets ya no existía.* Se reasignó a mano en los tres nodos Sheets. `documentId` sí viajaba en el export.
-* *El repo vivía en Google Drive (`G:\\Mi unidad\\`).* `.git` son miles de archivos pequeños sincronizados constantemente sobre un drive virtual: índice lento, locks en conflicto, riesgo de corrupción silenciosa por stubs no materializados. Se copió (no se movió) a `C:` con `robocopy /E`, se verificó `git status` / `log` / `remote` en el destino, y solo después se retiró el original. **Destruir el estado bueno es siempre el último paso, nunca parte del mismo paso que crea el nuevo.**
-* *La fórmula de `candidatas` devolvía vacío.* No eran las letras de columna — `K`=prefiltro, `M`=puntaje, `O`=banderas estaban bien. Causa raíz: `FILTER` con rangos de altura distinta (`A:O` completo contra condiciones de columna completa) no alinea y falla en silencio. Se acotaron los rangos a `A2:O` y se corrigió el `SORT` de la columna 14 (`desglose`) a la 13 (`puntaje`). Diagnosticado con tres `CONTAR.SI` — una condición a la vez, no cambiando la fórmula al azar. Sondas: 75 con `prefiltro="si"`, 24 con `puntaje>=5`, 270 filas.
-* *No se pudo medir el scoring nuevo.* Ver abajo.
+1. **Cadena `else if` en orden invertido.** `"Sr. Software Engineer II"` matcheaba la rama de `ii` antes que la de `senior` y salía con `seniority 10` — el puntaje de un mid. La rama `sr.` nunca se evaluaba. Dos líneas mal ordenadas premiando exactamente lo contrario de lo que debían.
+2. **Plurales invisibles.** `\bintegration\b` no matchea `"integrations"`: la `s` es carácter de palabra y mata el límite. Lo mismo con `apis`, `webhooks`. Las ofertas escriben casi todo en plural — se perdía la mayoría de los matches de stack. Corregido con `\b{término}s?\b`.
+3. **Vocabulario propio en vez de vocabulario de mercado.** Las listas estaban escritas con los términos con que uno se describe, no con los que escriben las ofertas: `fintech` (nadie lo escribe; escriben *trading*, *brokerage*, *payments*), `javascript` (escriben *Node.js*), `trade` (no matchea *trading*). `node.js` no existía en ninguna lista.
+4. **`seniority` medía prestigio del puesto, no distancia.** Un `senior` daba 4 sobre 10 en vez de 0. Toda vacante con título alto flotaba hacia arriba.
 
-\---
+**Evidencia acumulada del bug 1 + 3:** NinjaTrader `Sr. Software Engineer II, Platform/API` — un broker de futuros, con Node/TypeScript, colas y event-driven — salía con `stack 1.0 | seniority 10 | contexto 0`. Los tres números mentían a la vez.
+
+---
+
+**El quinto hallazgo, y el más importante — piso de stack:**
+
+Clara `Junior Data Scientist` sacó **5.1 con `stack 1.6`**. Pasó el umbral por `seniority 9` (dice "Junior") y `contexto 8` (es fintech). Pedía Scikit-learn, TensorFlow, AWS, Databricks — nada del perfil.
+
+La ponderación `stack 0.5 / seniority 0.3 / contexto 0.2` permite pasar con encaje técnico casi nulo si las otras dos dimensiones van llenas. **Ninguna de esas dos mide si sabes hacer el trabajo.**
+
+Se agregó `PISO_STACK = 2.0`: si el stack no llega, el puntaje se corta a 0 sin importar lo demás.
+
+---
 
 **Decisiones:**
 
-* **La descripción no se persiste en el Sheet.** El `Puntuar` la tiene viva en memoria cuando corre — el pipeline nunca tuvo el problema. Para la capa 2b se releerá el feed desde la `url` guardada, en vez de almacenar 3500 caracteres por fila. La decisión original de no guardarla sigue siendo correcta; lo que cambió fue el requisito, no el criterio.
-* **La medición del `Puntuar` se hará en producción, no en un banco de pruebas.** Medir sin descripción daría un número falso — peor que no medir. Se pegó el código corregido y se comparará contra los puntajes ya guardados en la próxima corrida real.
-* **Sin cron todavía.** Un flujo que no se ha visto correr limpio varias veces no se automatiza; automatizar un flujo con bugs solo hace que los bugs corran solos.
-* **`verificar\_tokens.py` y n8n no se integran.** Son dos herramientas separadas a propósito: Python se corre a mano cuando se agregan empresas, su salida se pega en la hoja `empresa`, y n8n lee de ahí. El punto de contacto es la hoja, y lo cruza el humano.
+- **Ventana de 48 horas, dura.** Razón del negocio, no técnica: *una vacante de 3 días con 100 aplicaciones ya no es una oportunidad, es una estadística*. La ventaja del radar es llegar al ATS antes que los agregadores. Si no hay nada fresco, no hay nada — mejor vacío que basura.
+- **`antiguedad_dias` se calcula al vuelo en la fórmula, no se almacena.** Un valor guardado se congela: una vacante de hoy diría `0` para siempre. `publicada` ya está guardada; con eso basta.
+- **`candidatas` ordena por `publicada` (col. 17), no por puntaje.** Dentro de una ventana de 48h todas están frescas: lo que decide es cuál llegó primero, donde aún no hay cola.
+- **Piso arranca en 2.0, no en 3.0.** No hay datos para justificar 3.0. Se aprieta con evidencia — el error que se cometió con `a0bd19a`.
+- **El piso deja bandera, no descarta callado.** `KNOCKOUT: stack 1.8 bajo el piso de 2.0` permite ver qué tan cerca quedó y recalibrar. Principio: ningún descarte silencioso.
+- **LinkedIn e Indeed descartados como fuentes.** No tienen feed público; sus APIs son solo para partners. El conector de Indeed sirve para búsqueda manual, no para un cron.
 
-\---
+---
 
-**Resultados:**
+**Fórmula final de `candidatas`:**
 
-* Flujo completo: 4 empresas → 247 normalizadas → 8 nuevas (dedup correcta) → 3 pasan el prefiltro → 8 guardadas
-* **Prefiltro corregido medido: 71 de 264 pasan.** Las correcciones (límite de palabra `\\b`, siglas de bloqueo) no tumbaron candidatas. Que el entero coincida con el baseline de 71/249 es casualidad, no confirmación: 28,5% antes, 26,9% ahora.
-* Medido con un workflow desechable `TEMP - medir scoring` (leer hoja → prefiltro → contar), ya borrado. **Principio: la lógica sin efectos secundarios se puede probar; la que escribe en algún lado, no.** Aplicarlo desde el diseño en la capa 2b.
-* Confirmado: **n8n corre en Railway**, no local. El cron sí dispararía con el PC apagado — el README no miente en eso.
+```
+=IFNA(SORT(FILTER(vacantes!A2:Q, vacantes!K2:K="si", vacantes!M2:M>=5,
+  NOT(REGEXMATCH(vacantes!O2:O&"", "KNOCKOUT")), vacantes!Q2:Q<>"",
+  (NOW()-DATEVALUE(LEFT(vacantes!Q2:Q&"          ",10)))<=2), 17, FALSE),
+  "Sin candidatas en las últimas 48 horas")
+```
 
-\---
+`LEFT(...,10)` corta el ISO a fecha; `DATEVALUE` lo convierte. El relleno de espacios protege las celdas vacías: `DATEVALUE("")` revienta la fórmula entera.
 
-**Deuda asumida:**
+---
 
-* **`a0bd19a` ("corregir scoring") ya está en `origin/main` sin haberse medido nunca contra datos reales.** Push antes de validar. Es la misma falla que originó la auditoría de la mañana —lo publicado no es lo verificado— con dos días de vida. El pendiente 3 de `ESTADO.md` no está hecho: está saltado.
-* El trigger se llama `Cada dia 6am` pero está configurado como `interval: \[{ field: "hours" }]` — corre **cada hora**. Nombre mintiendo, igual que el README.
-* La hoja `vacantes` puede no tener fila de encabezados. Si es así, el `Map Automatically` de n8n no tiene contra qué mapear y las 270 filas podrían estar desalineadas. **Sin verificar.**
-* Las 3 vacantes nuevas del 18 que pasaron el prefiltro se puntuaron con el código viejo. Sin revisar por qué ninguna llegó a `candidatas`.
-* `docs/Hoja\_de\_ruta\_para\_negocios.png` y `docs/Nuevo\_Ecosistema\_Digital\_de\_Ventas.png` sin trackear y sin relación aparente con el radar. Decidir si se quedan antes del próximo `git add -A`.
-* Commits `5d75da5` y `ff954f9` son el mismo, duplicado con y sin tildes. Cicatriz del enredo de bitácoras del 14. En historial público, no se toca.
-* Las listas del prefiltro siguen duplicadas entre `perfil.json` y los nodos.
+**Resultado medido:**
 
-\---
+**Cero candidatas de 628.** No es falla: 620 son histórico descargado hoy de golpe al agregar 6 boards completos. Diagnóstico por partes: 359 filas con `publicada`, 25 con puntaje ≥5, y **solo 1 con ambas** — Clara, publicada el 22 de mayo. Rechazada correctamente por la ventana.
 
-**Riesgo de diseño detectado para la capa 2b:**
+Sin `publicada`, esa vacante de mayo habría entrado hoy como "nueva". **El trabajo del 19 en la mañana evitó una postulación a una oferta de hace tres meses.**
 
-Las descripciones vienen de feeds públicos de ATS — **entrada no confiable**. Una oferta real de hoy incluía la frase "experience working with Claude ... is required" dentro del texto; inofensiva, pero muestra la forma exacta que tendría una inyección de prompt. Cuando la capa 2b mande esos 3500 caracteres a un LLM, el prompt debe delimitar explícitamente la descripción como **dato, no como instrucción**. Se piensa antes de escribir la capa, no después.
+---
 
-\---
+**Deuda viva:**
+
+- **Las 628 guardadas conservan puntaje viejo.** El dedup las salta, no se repuntúan. La medición real del scoring corregido empieza con el flujo entrante de mañana. **El scoring sigue sin medirse contra un lote grande.**
+- **Mapeos de `publicada` de Lever y Ashby: aún sin verificar.** Mural y Runa entraron hoy; falta confirmar que traen fecha. Si vienen `null`, el filtro `Q<>""` las mata enteras y no se notaría.
+- **Columna `R` creada y vacía.** Decidir si se borra.
+- **Trigger** sigue en `field: "hours"` (cada hora) con nombre `Cada dia 6am`. Uso previsto: manual, 2 veces al día.
+- **Tokens 404 no significan que la empresa no use Greenhouse** — significa que el token no es ese. Rappi, Platzi, Kavak, Mercadolibre y los 6 de Lever casi seguro tienen board con otro slug. Se cosechan entrando al sitio de carreras y copiando la URL. Duplicaría el alcance.
+- **Las listas del prefiltro siguen duplicadas** entre `perfil.json` y los nodos. Hoy se editó solo el nodo: **`perfil.json` quedó desincronizado** (le faltan `node.js`, los sectores nuevos, el piso). Deuda que creció hoy.
+- `verificar_tokens.py` tiene los tokens dentro del código (`URLS_CANDIDATAS`, línea 15). Al menos está aislada y documentada.
+- Capa 2b sin empezar. Riesgo de inyección de prompt ya identificado.
+
+---
+
+**Aprendizajes:**
+
+- **Una consola que muestra mal no es evidencia de un archivo dañado.** `Get-Content` en PowerShell 5.1 decodifica en ANSI si no hay BOM: mostró `â€"` sobre un UTF-8 intacto. Casi se "repara" un archivo sano.
+- **Un número de fila no es un identificador.** Se persiguió la "fila fantasma 272" de la sesión anterior y hoy la 272 era otra vacante distinta. Se busca por condición (`COUNTIFS`), no por posición.
+- **`#N/A` en un `FILTER` no es error de sintaxis** — es "ninguna fila cumple". `#VALUE!` sería la fórmula; `#REF!` el rango. El error dice dónde mirar.
+- **Un `FILTER` con 5 condiciones que da vacío no dice cuál falló.** Se aislaron con `COUNTA`, `COUNTIF`, `MAX` y `COUNTIFS` hasta encontrar el número exacto.
+- **Las listas de matching no son autodescripción, son vocabulario de mercado.** La pregunta correcta no es "¿qué sé hacer?" sino "¿cómo lo nombran los que publican?".
+
+---
 
 **Siguiente:**
 
-1. Verificar si `vacantes` tiene fila de encabezados
-2. Correr el flujo real con el `Puntuar` corregido y comparar contra los puntajes guardados
-3. Revisar las 3 del 18: ¿puntaje bajo o KNOCKOUT?
-4. Arreglar el trigger (cada hora → 6am) y actualizar el README
-5. Después: capa 2b
+1. Correr manual mañana y medir con flujo entrante real — primera medición honesta del scoring corregido
+2. Verificar que Mural y Runa traen `publicada` (test real de Ashby)
+3. Cosechar los tokens reales de los 404 (Rappi, Platzi, Kavak, Mercadolibre, Nowports, Belvo)
+4. Sincronizar `perfil.json` con los nodos, o pagar la deuda moviendo las listas a una hoja del Sheet
+5. Actualizar `ESTADO.md`, que sigue dos sesiones atrasado
+6. Después: capa 2b
 
+**Si en 3 días sigue en cero, el problema no es el código: son las fuentes.** El arreglo sería llegar a 50-100 empresas, no volver a tocar el scoring.
+---
+
+## 2026-09-21 — v2: de n8n en Railway a Python en GitHub Actions
+
+**Objetivo:** entender por qué el radar dejó de mostrar vacantes y dejarlo funcionando solo, sin servidor que pagar.
+
+**Diagnóstico** (medido sobre los 10 feeds reales, con el código del 19 de agosto):
+
+- **Causa cero: el radar no corría.** Se perdió el acceso a Railway. Nada avisó: el único síntoma fue no ver vacantes.
+- **El recorte a 3500 caracteres rompía el puntaje.** 65 de las 70 vacantes que pasaban el prefiltro llegaban cortadas; el puntaje leía la presentación de la empresa, no los requisitos. Clara *AI Growth Automation Engineer* (pide n8n, Python, OpenAI, Anthropic, Zapier) sacaba 4.7 → invisible. Con texto completo: 7.3. En todo el corpus, las vacantes ≥5 pasaban de 6 a 23.
+- **Ventana de 48h sobre `publicada` + dedup = pérdida permanente.** Lo que se descubría tarde se guardaba, el dedup no lo reevaluaba y la vista nunca lo mostraba. Últimas 48h: 5 publicadas en las 10 fuentes, 0 pasaban el prefiltro.
+- **Fuentes insuficientes.** Bitso 404 (perdida en silencio), Nubank 0 (se mudó a Ashby), Runa era otra empresa (Londres).
+- **"Senior" era knockout disfrazado.** 36 de 70 eran senior con seniority 0: necesitaban stack 10 para llegar a 5; el máximo observado fue 5.4.
+- **La lista negra de ubicación tenía agujeros.** `Sweden (Remote)`, `Remote, Singapore`, `San Francisco / Remote` pasaban como "remoto sin país".
+- **Huella permanente.** 281 de 594 vacantes repetían título dentro de su empresa; una reapertura se descartaba sin dejar fila.
+- **Otra vez, lo publicado no era lo que corría.** Último commit del 19 de agosto; el flujo de septiembre solo existía dentro de n8n.
+
+**Construido:**
+
+- Paquete `radar/` en Python: `fuentes`, `prefiltro`, `puntuar`, `pipeline`, `registro`, `telegram`, `config`, `modelos` (pydantic), `texto`
+- `config/radar.json`: **única** fuente de verdad de listas, pesos y umbrales. Se paga la deuda de listas duplicadas: el código lee este archivo y no hay otra copia
+- `config/empresas.csv`: 28 fuentes activas (antes 10), verificadas una por una contra los feeds reales el 21-sep
+- `.github/workflows/radar.yml`: cron 4 veces al día (06:17, 11:17, 15:17, 19:17 Bogotá), botón manual, commit de `data/` solo si cambia
+- `.github/workflows/pruebas.yml`: CI con 71 pruebas + corrida completa sin red en cada push
+- Telegram: alerta inmediata por candidata, resumen diario con salud de fuentes, comandos `/visto N` y `/pendientes`
+- `verificar_tokens.py` v3: lee `config/urls_candidatas.txt` y agrega a `config/empresas.csv` sin pisar
+- n8n movido a `legacy/n8n/`
+
+**Decisiones:**
+
+- **GitHub Actions sobre n8n Cloud o Railway.** Gratis en repo público, sin servidor, y el código que corre es exactamente el del repo. Descartado: n8n en cuenta temporal (vence y vuelve a pasar lo de Railway).
+- **Registro en CSV versionado, no en Google Sheets.** Un solo escritor, miles de filas, y el historial de git es la auditoría. Sheets exigía cuenta de servicio y la vista `candidatas` se rompió dos veces por letras de columna.
+- **csv de la stdlib, no pandas, para el registro.** Solo se leen y escriben filas; pandas agrega ~30 MB y convierte tipos solo. Para analizar, `pandas.read_csv(..., dtype=str)`.
+- **Texto completo para puntuar.** El tope de contexto es problema de la capa que paga tokens, no del filtro gratis.
+- **Ubicación con lista blanca real.** Pasa solo lo que nombra un lugar elegible o lo que es remoto sin nombrar ningún lugar. Se elimina la excepción de lista negra de `UBIC_BLOQUEO`.
+- **Seniority por tipo de rol.** Desarrollo: senior 3 + BRECHA, lead knockout. Automatización/operaciones: senior 8, lead 4 + BRECHA. Staff/principal/director: knockout en ambas. Razón: "senior" en desarrollo mide años de código; en automatización mide entender el negocio, y ahí los 25 años cuentan.
+- **Ventana de 7 días** (antes 48h) y **huella de 30 días** (antes permanente). Todo descarte por huella queda como `duplicada`, con referencia a la vacante original.
+- **Autorización laboral:** knockout solo si es en OTRO país. "Authorized to work in Colombia" ya no descarta.
+- **Híbrido en Medellín no marca.** Híbrido en otra ciudad sigue siendo RIESGO (o KNOCKOUT si es explícito).
+- **Sin comando `/postule`.** El registro es público; a qué empresa se postula uno no va en un repo público.
+- **Sin conteo doble:** los términos largos se evalúan primero y se retiran (`rest api` ya no cuenta además como `api`).
+- **Lever lee `lists`.** Ahí pone los requisitos; antes solo se leía `descriptionPlain`.
+- **Señal de vida:** el resumen llega todos los días aunque no haya nada. Si no llega, el radar está caído.
+
+**Problemas y causa raíz:**
+
+- *Síntoma: "no volví a ver vacantes".* Causa: cinco fallas que se sumaban (no corría + recorte + ventana + fuentes + seniority). Ninguna sola explicaba el cero; juntas lo garantizaban. Lección: antes de tocar el scoring, medir el embudo completo sobre datos reales, etapa por etapa.
+- *La red del entorno de desarrollo bloquea los ATS.* Las pruebas usan fixtures sintéticos con la forma real de cada API (campos verificados contra los feeds). La primera corrida con red es la de Actions.
+
+**Deuda asumida:**
+
+- **El scoring nuevo no se ha corrido sobre el corpus real en Python.** Se validó en JavaScript contra los feeds y en Python contra fixtures. La primera corrida de Actions es la medición real: revisar cuántas candidatas salen.
+- **Términos agregados al stack sin confirmar:** `agent`, `rag`, `whatsapp`. Salen de proyectos propios (multi-agente, RAG en n8n, WhatsApp Business API). Confirmar o quitar en `config/radar.json`.
+- **`perfil.json` privado conserva las secciones `prefiltro`/`scoring`/`knockout` viejas.** Ya no las lee nadie. Borrarlas a mano (no se tocaron para no perder nada irrecuperable).
+- **Empresas colombianas grandes fuera de alcance** (Rappi, Mercado Libre, Platzi, Kavak, Truora, Habi...): no usan Greenhouse/Lever/Ashby. Siguiente adaptador: SmartRecruiters (API pública).
+- **GitHub desactiva crons tras 60 días sin actividad en el repo.** Los commits diarios del bot deberían contar como actividad; si un día no llega el resumen, revisar primero eso.
+
+**Siguiente:**
+
+1. Copiar `radar.yml` y `pruebas.yml` a `.github/workflows/` (la herramienta no puede escribir en esa carpeta), crear el bot, cargar los dos secrets, push, y correr el workflow a mano en modo seco
+2. Correr en modo normal y medir: candidatas de la primera corrida vs. lo esperado (~1-2 por semana)
+3. Confirmar o quitar `agent`, `rag`, `whatsapp` del stack
+4. Limpiar `perfil.json` privado
+5. Después: capa 2b con LLM (descripción delimitada como dato, no instrucción)

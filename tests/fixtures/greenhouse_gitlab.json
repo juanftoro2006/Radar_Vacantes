@@ -1,0 +1,24 @@
+{
+ "jobs": [
+  {
+   "id": 900051,
+   "title": "Backend Engineer, Integrations",
+   "location": {
+    "name": "Remote"
+   },
+   "absolute_url": "https://job-boards.greenhouse.io/ejemplo/jobs/900051",
+   "first_published": "2026-09-21T12:00:00+00:00",
+   "content": "&lt;p&gt;Python, REST APIs, webhooks, integrations, SQL, Git, Docker.&lt;/p&gt;&lt;p&gt;Candidates must be authorized to work in the United States.&lt;/p&gt;"
+  },
+  {
+   "id": 900052,
+   "title": "Senior Backend Engineer",
+   "location": {
+    "name": "Sweden (Remote)"
+   },
+   "absolute_url": "https://job-boards.greenhouse.io/ejemplo/jobs/900052",
+   "first_published": "2026-09-21T12:00:00+00:00",
+   "content": "&lt;p&gt;Python and APIs.&lt;/p&gt;"
+  }
+ ]
+}

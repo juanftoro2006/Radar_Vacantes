@@ -1,2 +1,5 @@
-# Unica dependencia directa. El resto son transitivas de requests.
-requests==2.34.2
+# Dependencias de ejecucion. Versiones con techo: un major nuevo no entra sin probarlo.
+requests>=2.32,<3
+pydantic>=2.7,<3
+# zoneinfo necesita la base de zonas horarias; Linux la trae, Windows no.
+tzdata>=2024.1

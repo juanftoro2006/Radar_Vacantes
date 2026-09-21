@@ -1,8 +1,8 @@
 # Radar de Vacantes
 
-Sistema automatizado que detecta ofertas de empleo **en las primeras 24 horas de publicadas**, directamente desde los ATS de las empresas, y las puntúa contra un perfil profesional estructurado.
+Sistema automatizado que detecta ofertas de empleo **en sus primeros días**, directamente desde los ATS de las empresas, las puntúa contra un perfil profesional y **avisa por Telegram** solo las que vale la pena leer.
 
-No es un buscador de empleo. Es un filtro: convierte cientos de vacantes diarias en una lista corta de las que realmente vale la pena leer.
+No es un buscador de empleo. Es un filtro: convierte miles de vacantes en un par de avisos por semana.
 
 ---
 
@@ -10,30 +10,34 @@ No es un buscador de empleo. Es un filtro: convierte cientos de vacantes diarias
 
 Buscar trabajo como desarrollador tiene tres fallas estructurales que ninguna plataforma resuelve:
 
-**1. Las vacantes fantasma.** Entre el 18% y el 27% de los avisos publicados nunca se llenan. Se mantienen activos para alimentar pipelines de reclutamiento o por simple inercia administrativa. El costo promedio de postularse a una es de unas 9 horas entre investigación, adaptación del CV y espera.
+**1. Las vacantes fantasma.** Entre el 18% y el 27% de los avisos publicados nunca se llenan. Se mantienen activos para alimentar pipelines de reclutamiento o por simple inercia administrativa.
 
 **2. La ventana se cierra rápido.** Una vacante de ingeniería puede acumular cientos de postulaciones en días. Varios ATS presentan los candidatos al reclutador en orden de llegada, no por puntaje: postular tarde equivale a no postular.
 
-**3. Los agregadores llegan tarde y sucios.** LinkedIn e Indeed replican avisos con retraso y mantienen visibles los que ya se cerraron. Para cuando la vacante aparece ahí, ya lleva días compitiendo.
+**3. Los agregadores llegan tarde y sucios.** LinkedIn e Indeed replican avisos con retraso y mantienen visibles los que ya se cerraron.
 
 ## La solución
 
 Los ATS más usados (Greenhouse, Lever, Ashby) exponen sus vacantes en **feeds JSON públicos, sin autenticación**. Es la misma fuente que alimenta la página de empleos de la empresa, disponible antes de que el aviso llegue a ningún agregador.
 
-Este sistema consulta esos feeds a diario, detecta lo nuevo y lo evalúa.
-
 ```
-Feeds JSON de ATS
+GitHub Actions (4 veces al día)
         ↓
-  Normalización        un esquema único para todos los proveedores
+  Feeds JSON de 28 empresas      Greenhouse · Lever · Ashby
         ↓
-  Deduplicación        doble clave: id técnico + huella de contenido
+  Normalización                  un esquema único, texto completo
         ↓
-  Prefiltro            lista blanca de títulos y ubicaciones
+  Deduplicación                  clave técnica + huella con ventana de 30 días
         ↓
-  Scoring              stack, seniority, contexto de negocio
+  Prefiltro                      lista blanca de títulos y ubicaciones
         ↓
-  Vista candidatas     lista corta, ordenada, lista para leer
+  Puntaje                        stack · seniority por tipo de rol · sector
+        ↓
+  Candidatas                     puntaje ≥ 5, sin knockout, publicadas hace ≤ 7 días
+        ↓
+  Telegram                       alerta inmediata + resumen diario con salud de fuentes
+        ↓
+  data/vacantes.csv              registro versionado en git
 ```
 
 ---
@@ -44,128 +48,150 @@ Esta sección es el núcleo del proyecto. El código es reemplazable; las decisi
 
 ### Filtro barato antes que filtro caro
 
-De ~250 vacantes diarias, unas 180 se descartan con búsqueda de texto: costo cero, resultado determinista. Solo las que sobreviven pasan al scoring, y solo las mejores llegarían a un análisis con LLM.
+El prefiltro y el puntaje son búsqueda de texto: costo cero, resultado determinista. Solo lo que sobrevive llegaría a un análisis con LLM. Invertir el orden sería pagar juicio caro para descubrir que un puesto de contabilidad no es un puesto de desarrollo.
 
-Invertir el orden significaría pagar juicio caro para descubrir que un puesto de contabilidad no es un puesto de desarrollo.
+**Corolario que costó un bug:** al filtro barato no se le recorta la entrada. La v1 cortaba las descripciones a 3500 caracteres "para ahorrar tokens del LLM", y el puntaje terminaba leyendo la presentación de la empresa en vez de los requisitos. Una vacante que pedía n8n, Python, OpenAI y Zapier sacaba 4.7 y nunca aparecía; con el texto completo, el mismo scoring le daba 7.3 (medido el 21-sep-2026 sobre el feed real). El recorte, si hace falta, es trabajo de la capa que paga tokens.
 
 ### Lista blanca, nunca lista negra
 
-El conjunto de títulos que sirven es corto y conocido (engineer, developer, automation, integration, data...). El conjunto de los que no sirven es infinito: payroll, legal, enfermería, ventas, diseño, reclutamiento...
+El conjunto de títulos que sirven es corto y conocido. El de los que no sirven es infinito. **Se enumera el conjunto pequeño y conocido, nunca el infinito.**
 
-**Se enumera el conjunto pequeño y conocido, nunca el infinito.** Una lista negra siempre tiene un agujero que no previste.
-
-Lo mismo aplica a la ubicación: enumerar dónde eres elegible es corto; enumerar dónde no lo eres es todo el planeta.
+Lo mismo en ubicación, y aquí la v1 se traicionó a sí misma: bloqueaba una lista de países y dejaba pasar como "remoto" todo lo demás. `Sweden (Remote)`, `Remote, Singapore` y `San Francisco / Remote` pasaban. Hay 190 países; la lista negra siempre tiene un agujero. Ahora una ubicación pasa solo si nombra un lugar elegible (Colombia, LATAM…) o si es remota **sin nombrar ningún lugar** (`Remote`, `Remote, Global`, `Home based - Americas`).
 
 ### La lista blanca es generosa a propósito
 
-Un falso positivo cuesta una evaluación adicional. Un falso negativo cuesta una oportunidad que nunca viste.
+Un falso positivo cuesta una lectura. Un falso negativo cuesta una oportunidad que nunca viste. **Cuando el costo de equivocarse es asimétrico, el filtro se inclina hacia el error barato.**
 
-**Cuando el costo de equivocarse es asimétrico, el filtro se inclina hacia el error barato.**
-
-### Knockout descarta, brecha no
-
-Tres tipos de señal, tratados distinto:
+### Knockout descarta, brecha y riesgo marcan
 
 | Señal | Ejemplo | Efecto |
 |---|---|---|
-| `KNOCKOUT` | Exige autorización laboral en otro país | Descarta |
-| `BRECHA` | Piden 5 años, tienes 2 | Marca, no descarta |
-| `RIESGO` | Exigen inglés avanzado | Marca, no descarta |
+| `KNOCKOUT` | Exige autorización laboral en EE. UU.; stack bajo el piso; staff/principal | Puntaje 0 |
+| `BRECHA` | Piden 5 años; título senior en un rol de desarrollo | Marca, no descarta |
+| `RIESGO` | Inglés avanzado; menciona híbrido | Marca, no descarta |
 
-Un requisito de años es negociable con evidencia. Una jurisdicción legal no lo es. Mezclarlas en un solo puntaje destruye esa distinción — y produce el "27% de coincidencia" que no le sirve a nadie.
+Un requisito de años es negociable con evidencia. Una jurisdicción legal no lo es. Mezclarlas en un solo puntaje destruye esa distinción.
 
-### Se guarda todo, se puntúa poco
+### La seniority depende del tipo de rol
 
-Las vacantes descartadas por el prefiltro **también se registran**. Si no, el sistema volvería a detectarlas como nuevas al día siguiente, indefinidamente.
+"Senior" no mide lo mismo en todos los puestos. En desarrollo puro mide años escribiendo código en producción. En automatización e integraciones mide entender el proceso del negocio, y ahí 25 años de operación cuentan.
 
-**El registro sirve a la deduplicación. El puntaje sirve a la decisión.** Son propósitos distintos y por eso todo se guarda pero solo una parte se evalúa.
+| Título | Desarrollo | Automatización / operaciones |
+|---|---|---|
+| junior | 9 | 8 |
+| sin marca | 6 | 10 |
+| mid / II | 10 | 10 |
+| senior | 3 + BRECHA | 8 |
+| lead / manager / architect | KNOCKOUT | 4 + BRECHA |
+| staff / principal / director | KNOCKOUT | KNOCKOUT |
+
+### Piso de stack
+
+La ponderación `stack 0.5 · seniority 0.3 · contexto 0.2` permitía pasar el umbral con encaje técnico casi nulo si el título decía "Junior" y la empresa era fintech. Ninguna de esas dos dimensiones mide si sabes hacer el trabajo. Si el stack no llega a 2.0, es knockout con bandera visible.
+
+### Se guarda todo, se avisa poco
+
+Todo lo que se descarga queda en `data/vacantes.csv`, pase o no el filtro, con el motivo. **El registro sirve a la deduplicación y a la auditoría. El aviso sirve a la decisión.**
 
 ### Celda vacía no es cero
 
-Una vacante sin puntaje significa "no se evaluó". Un puntaje de cero significa "se evaluó y quedó descartada". Rellenar lo primero con lo segundo destruye información.
+Una vacante sin puntaje significa "no se evaluó". Un puntaje de cero significa "se evaluó y quedó descartada".
 
-### Doble clave de deduplicación
+### Doble clave de deduplicación, con memoria limitada
 
-- **Clave técnica:** `fuente:empresa:id` — identifica la vacante exacta en el ATS
-- **Huella de contenido:** `empresa:titulo_normalizado` — sobrevive a la republicación
+- **Clave técnica:** `fuente:token:id`. Identifica la vacante exacta.
+- **Huella:** `token:título_normalizado`. Si la misma empresa ya avisó el mismo título en los últimos 30 días, la nueva queda `duplicada`: registrada, no avisada. Pasa cuando una vacante se publica en tres ciudades o se republica con otro id.
 
-Cuando una empresa borra un aviso y lo vuelve a publicar, el ATS asigna un id nuevo. Sin la huella, el churn de republicaciones inundaría el sistema.
+La v1 aplicaba la huella para siempre: si Clara reabría un "Backend Engineer" tres meses después, se descartaba sin dejar fila. Ahora la huella caduca y todo descarte queda registrado.
+
+### Ventana de 7 días, no de 48 horas
+
+La ventaja del radar es llegar antes que la cola, pero una ventana de 48h medida sobre la fecha de publicación convierte cualquier corrida tardía en una pérdida permanente. Con 7 días y alertas inmediatas, lo fresco llega fresco y lo que se descubre tarde todavía aparece, con su antigüedad a la vista.
 
 ### Configuración fuera del código
 
-Lo que varía **en valor** entre proveedores (la URL del feed) vive en la hoja de cálculo. Lo que varía **en estructura** (los nombres de los campos: `title` vs `text`, `absolute_url` vs `hostedUrl`) vive en el código, en un único mapa.
+Lo que varía **en valor** vive en `config/`: qué empresas se consultan (`empresas.csv`) y qué cuenta como encaje (`radar.json`, única fuente de verdad de listas, pesos y umbrales). Lo que varía **en estructura** (nombres de campos de cada ATS) vive en `radar/fuentes.py`, en un único mapa.
 
-Agregar un ATS nuevo son tres cambios de una línea, sin refactor.
+### Ningún descarte silencioso, ninguna caída silenciosa
 
-### Fallar fuerte vs. descartar suave
-
-- Una vacante malformada se descarta y se registra en el log. El resto del lote es válido.
-- Una desalineación estructural (más respuestas que empresas) **lanza excepción y detiene todo**. Si no se sabe a qué empresa pertenece cada vacante, ningún dato de esa corrida sirve.
-
-Y todo lo que se descarta deja rastro: **ningún descarte silencioso.**
+- Una vacante malformada se omite y queda en el log.
+- Una fuente que responde 404 no tumba la corrida: aparece en el resumen diario de Telegram con la fecha desde la que está caída.
+- **Señal de vida:** el resumen llega todos los días, aunque no haya candidatas. Si un día no llega, el radar está caído. La v1 dejó de correr cuando se perdió el acceso a Railway, y el único síntoma fue dejar de ver vacantes.
 
 ---
 
 ## Stack
 
-| Componente | Tecnología |
-|---|---|
-| Orquestación | n8n (schedule + HTTP + Code) |
-| Verificación de tokens | Python 3 + `requests` |
-| Persistencia | Google Sheets |
-| Fuentes | Greenhouse, Lever y Ashby Job Board APIs |
+| Componente | Tecnología | Por qué |
+|---|---|---|
+| Ejecución | GitHub Actions (cron) | Gratis en repo público, sin servidor que pagar ni mantener |
+| Pipeline | Python 3.12 + `requests` + `pydantic` | Validación temprana: un campo mal escrito falla al cargar, no en silencio |
+| Registro | CSV versionado en git | Miles de filas, un solo escritor; el historial del repo es la auditoría |
+| Avisos | Telegram Bot API | Llega al celular; los comandos se leen con `getUpdates`, sin webhook |
+| Pruebas | `pytest` + fixtures con la forma real de cada API | Se prueba sin red y sin depender del día |
 
-Google Sheets se eligió sobre Postgres deliberadamente: el volumen es de miles de filas, no hay concurrencia, y el flujo de trabajo requiere marcar filas a mano. Migrar es cambiar un nodo — el esquema es idéntico.
+La v1 (n8n + Google Sheets) está en `legacy/n8n/` como referencia.
 
 ---
 
 ## Estructura
 
 ```
-radar-vacantes/
-├── README.md
-├── BITACORA.md              registro de sesiones y decisiones
-├── verificar_tokens.py      valida tokens de ATS y genera empresas.csv
-├── perfil.ejemplo.json      plantilla del perfil (el real no se publica)
-├── workflow.json            flujo de n8n exportado
-├── requirements.txt
-└── docs/
-    └── esquema.md           estructura de las hojas
+├── radar/
+│   ├── __main__.py       punto de entrada: python -m radar
+│   ├── pipeline.py       orquestación de una corrida
+│   ├── fuentes.py        descarga y normalización por ATS
+│   ├── prefiltro.py      título + ubicación
+│   ├── puntuar.py        stack, seniority, contexto, banderas
+│   ├── registro.py       CSV y estado
+│   ├── telegram.py       alertas, resumen y comandos
+│   ├── config.py         carga y validación de config/
+│   ├── modelos.py        modelos pydantic
+│   └── texto.py          normalización y matching
+├── config/
+│   ├── radar.json        listas, pesos y umbrales (única fuente de verdad)
+│   ├── empresas.csv      fuentes a consultar
+│   └── urls_candidatas.txt  entrada de verificar_tokens.py
+├── data/                 lo escribe el bot
+├── tests/
+├── verificar_tokens.py   valida tokens nuevos y los agrega a empresas.csv
+├── legacy/n8n/           la v1
+└── .github/workflows/    radar.yml (cron) y pruebas.yml (CI)
 ```
 
 ---
 
 ## Uso
 
-**1. Cosechar tokens.** Buscar en Google con el operador `site:` sobre los dominios de ATS y copiar las URLs completas de las empresas de interés.
-
-**2. Verificar.**
+**Correr local sin red** (pruebas y demo):
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python verificar_tokens.py
+.venv\Scripts\activate            # Linux/Mac: source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m pytest
+python -m radar --seco --no-guardar --fixtures tests/fixtures
 ```
 
-Genera `empresas.csv` con los tokens válidos y su plantilla de URL.
+**Agregar empresas:** pegar URLs en `config/urls_candidatas.txt` → `python verificar_tokens.py` → revisar `git diff config/empresas.csv` → commit.
 
-**3. Importar** `empresas.csv` a la hoja `empresas` del Sheet.
+**Comandos en Telegram** (se aplican en la siguiente corrida):
 
-**4. Importar** `workflow.json` en n8n, conectar credenciales de Google Sheets y programar la ejecución diaria.
+- `/visto 12 15`: marca candidatas como revisadas y las saca del resumen
+- `/pendientes`: pide el resumen en la siguiente corrida
+
+**Configurar en GitHub:** Settings → Secrets and variables → Actions → `TELEGRAM_TOKEN` y `TELEGRAM_CHAT_ID`. Sin ellos corre en modo seco con una advertencia.
 
 ---
 
 ## Privacidad
 
-`perfil.json` y `empresas.csv` **no se publican**. Contienen el perfil profesional real y la lista de empresas objetivo — estrategia personal, no contenido de repositorio. Se incluyen en `.gitignore` y se publica solo la plantilla de ejemplo.
+`perfil.json` (perfil completo, evidencia, textos de postulación) no se publica. El registro `data/vacantes.csv` sí es público: contiene vacantes públicas, sus puntajes y si se marcaron como vistas. Por eso no existe un comando `/postule`: a qué empresas se postula uno no va en un repo público.
 
 ---
 
 ## Estado
 
-Funcionando en producción con ejecución diaria.
+**v2 en migración (sep-2026):** pipeline en Python y pruebas listos. La ejecución automática empieza con la primera corrida verificada en GitHub Actions; hasta entonces este README no dice "en producción".
 
-**Siguiente:** capa de análisis con LLM sobre las mejores candidatas, para comparar el requerimiento contra la evidencia del perfil y orientar la carta de presentación.
-
-**Deuda técnica conocida:** las listas del prefiltro están embebidas en los nodos de n8n en lugar de leerse desde `perfil.json`. Hay dos copias de la misma verdad y van a divergir. Se resuelve moviendo el perfil a una hoja adicional del Sheet.
+**Siguiente:** capa de análisis con LLM sobre las candidatas avisadas, con la descripción delimitada como dato y no como instrucción (una oferta es entrada no confiable: prompt injection). Adaptadores para SmartRecruiters y Workday, donde publican varias empresas colombianas que no usan los tres ATS actuales.

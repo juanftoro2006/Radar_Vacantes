@@ -1,0 +1,28 @@
+[
+ {
+  "id": "l-900091",
+  "text": "AI Frontend Developer",
+  "categories": {
+   "commitment": "Remote",
+   "location": "Bogota",
+   "team": "AI",
+   "allLocations": [
+    "Bogota",
+    "Buenos Aires",
+    "Mexico",
+    "Colombia"
+   ]
+  },
+  "hostedUrl": "https://jobs.lever.co/ejemplo/l-900091",
+  "createdAt": 1790000000000,
+  "workplaceType": "remote",
+  "descriptionPlain": "Remote, Latin America. We build payment orchestration.",
+  "lists": [
+   {
+    "text": "Requirements",
+    "content": "<li>TypeScript and JavaScript</li><li>Integrate LLM APIs and agents</li><li>REST APIs</li>"
+   }
+  ],
+  "additionalPlain": ""
+ }
+]

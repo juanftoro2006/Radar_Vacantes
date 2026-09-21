@@ -1,0 +1,66 @@
+name: Radar de vacantes
+
+on:
+  schedule:
+    # Cron de GitHub va en UTC. Bogota = UTC-5.
+    # 11:17 UTC = 06:17 | 16:17 UTC = 11:17 | 20:17 UTC = 15:17 | 00:17 UTC = 19:17 (hora Bogota)
+    # Minuto 17 y no 00: a la hora en punto GitHub encola miles de crons y los retrasa.
+    - cron: "17 0,11,16,20 * * *"
+  workflow_dispatch:
+    inputs:
+      seco:
+        description: "Modo seco: no envia nada a Telegram"
+        type: boolean
+        default: false
+      resumen:
+        description: "Forzar el resumen diario"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # para commitear data/
+
+# Nunca dos corridas a la vez: las dos escribirian data/vacantes.csv.
+concurrency:
+  group: radar
+  cancel-in-progress: false
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Correr radar
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: >
+          python -m radar
+          ${{ inputs.seco && '--seco' || '' }}
+          ${{ inputs.resumen && '--resumen' || '' }}
+
+      # always(): aunque Telegram falle, el registro se guarda. Lo no avisado
+      # queda con 'notificada' vacia y la siguiente corrida lo reintenta.
+      - name: Guardar registro
+        if: always()
+        run: |
+          git config user.name "radar-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "Sin cambios en data/"
+            exit 0
+          fi
+          git commit -m "datos: corrida $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase --autostash
+          git push
