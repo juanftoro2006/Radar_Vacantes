@@ -1,0 +1,147 @@
+{
+  "telegram_offset": 0,
+  "ultimo_resumen": "",
+  "ultima_corrida": "2026-09-21T16:33:41-05:00",
+  "fuentes": {
+    "sezzle": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "nimblegravity": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "backblaze": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "ninjatrader": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "remotecom": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "clara": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "twilio": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "wizeline": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "factored": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "cobre": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "canonical": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "gitlab": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "turing": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "nubank": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "addi": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "supabase": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "posthog": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "resend": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "zapier": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "oyster": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "n8n": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "mural": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "prefect": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "buffer": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "yuno": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "toptal": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "dlocal": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    },
+    "ciandt": {
+      "ok": true,
+      "detalle": "",
+      "desde": "2026-09-21T16:33:41.849440-05:00"
+    }
+  }
+}
