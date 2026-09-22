@@ -47,7 +47,7 @@ def test_senior_en_automatizacion_compite(cfg):
 def test_senior_en_desarrollo_es_brecha_no_knockout(cfg):
     ev = puntuar(vacante("Senior Backend Engineer", STACK_BUENO), cfg)
     assert not ev.knockout
-    assert any(b.startswith("BRECHA: titulo 'senior'") for b in ev.banderas)
+    assert any(b.startswith("BRECHA: título 'senior'") for b in ev.banderas)
 
 
 def test_lead_en_desarrollo_es_knockout(cfg):
@@ -58,7 +58,7 @@ def test_lead_en_desarrollo_es_knockout(cfg):
 def test_lead_en_automatizacion_es_brecha(cfg):
     ev = puntuar(vacante("Automation Operations Lead", STACK_BUENO), cfg)
     assert not ev.knockout
-    assert any("BRECHA: titulo 'lead'" in b for b in ev.banderas)
+    assert any("BRECHA: título 'lead'" in b for b in ev.banderas)
 
 
 def test_piso_de_stack_deja_bandera(cfg):

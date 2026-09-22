@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -23,3 +23,5 @@ jobs:
       - run: python -m pytest
       - name: Corrida completa sin red
         run: python -m radar --seco --no-guardar --fixtures tests/fixtures
+      - name: Dashboard se genera con el registro real
+        run: python -m radar.dashboard --salida /tmp/site

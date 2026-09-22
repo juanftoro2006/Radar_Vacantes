@@ -21,7 +21,7 @@ Buscar trabajo como desarrollador tiene tres fallas estructurales que ninguna pl
 Los ATS más usados (Greenhouse, Lever, Ashby) exponen sus vacantes en **feeds JSON públicos, sin autenticación**. Es la misma fuente que alimenta la página de empleos de la empresa, disponible antes de que el aviso llegue a ningún agregador.
 
 ```
-GitHub Actions (4 veces al día)
+GitHub Actions (5 veces al día)
         ↓
   Feeds JSON de 28 empresas      Greenhouse · Lever · Ashby
         ↓
@@ -38,6 +38,8 @@ GitHub Actions (4 veces al día)
   Telegram                       alerta inmediata + resumen diario con salud de fuentes
         ↓
   data/vacantes.csv              registro versionado en git
+        ↓
+  Dashboard (GitHub Pages)       inventario de lo abierto, con botón para aplicar
 ```
 
 ---
@@ -112,6 +114,14 @@ La ventaja del radar es llegar antes que la cola, pero una ventana de 48h medida
 
 Lo que varía **en valor** vive en `config/`: qué empresas se consultan (`empresas.csv`) y qué cuenta como encaje (`radar.json`, única fuente de verdad de listas, pesos y umbrales). Lo que varía **en estructura** (nombres de campos de cada ATS) vive en `radar/fuentes.py`, en un único mapa.
 
+### Telegram para lo urgente, dashboard para el inventario
+
+Telegram avisa solo lo publicado hace 7 días o menos: la alerta sirve para llegar antes que la cola. El dashboard muestra todo lo que sigue abierto con puntaje ≥ 5, sin importar la antigüedad, con un botón **Aplicar** que abre la vacante en el ATS. Sin él, una vacante excelente descubierta tarde desaparecía: la primera corrida real encontró la mejor de todas (puntaje 9.4) con 24 días de publicada.
+
+"Postulé" se guarda en el `localStorage` del navegador y no en el repo: el registro es público, y a qué empresas se postula uno no lo es.
+
+Títulos, ubicaciones y URLs vienen de feeds de terceros, así que son entrada no confiable: el JSON se incrusta escapado (un título con `</script>` no cierra la etiqueta), el texto se pinta con `textContent` y solo se aceptan enlaces `http(s)`.
+
 ### Ningún descarte silencioso, ninguna caída silenciosa
 
 - Una vacante malformada se omite y queda en el log.
@@ -128,6 +138,7 @@ Lo que varía **en valor** vive en `config/`: qué empresas se consultan (`empre
 | Pipeline | Python 3.12 + `requests` + `pydantic` | Validación temprana: un campo mal escrito falla al cargar, no en silencio |
 | Registro | CSV versionado en git | Miles de filas, un solo escritor; el historial del repo es la auditoría |
 | Avisos | Telegram Bot API | Llega al celular; los comandos se leen con `getUpdates`, sin webhook |
+| Dashboard | HTML estático generado por el bot + GitHub Pages | Se regenera en cada corrida; sin servidor ni base de datos |
 | Pruebas | `pytest` + fixtures con la forma real de cada API | Se prueba sin red y sin depender del día |
 
 La v1 (n8n + Google Sheets) está en `legacy/n8n/` como referencia.
@@ -145,6 +156,7 @@ La v1 (n8n + Google Sheets) está en `legacy/n8n/` como referencia.
 │   ├── puntuar.py        stack, seniority, contexto, banderas
 │   ├── registro.py       CSV y estado
 │   ├── telegram.py       alertas, resumen y comandos
+│   ├── dashboard.py      genera site/index.html desde el registro
 │   ├── config.py         carga y validación de config/
 │   ├── modelos.py        modelos pydantic
 │   └── texto.py          normalización y matching
@@ -172,6 +184,8 @@ pip install -r requirements-dev.txt
 python -m pytest
 python -m radar --seco --no-guardar --fixtures tests/fixtures
 ```
+
+**Dashboard local:** `python -m radar.dashboard` genera `site/index.html`; se abre con doble clic.
 
 **Agregar empresas:** pegar URLs en `config/urls_candidatas.txt` → `python verificar_tokens.py` → revisar `git diff config/empresas.csv` → commit.
 

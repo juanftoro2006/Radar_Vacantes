@@ -15,3 +15,6 @@ perfil.json
 credenciales*.json
 Radar de Vacantes.json
 *.export.json
+
+# Dashboard generado por radar.dashboard (derivado de data/, no se versiona)
+site/

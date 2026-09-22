@@ -111,7 +111,7 @@ def puntuar(v: Vacante, cfg: Config) -> Evaluacion:
         seniority = 0
         banderas.append(f"KNOCKOUT: seniority '{nivel_nombre}' fuera de alcance en rol de {tipo}")
     elif nivel.brecha:
-        banderas.append(f"BRECHA: titulo '{nivel_nombre}' en rol de {tipo}")
+        banderas.append(f"BRECHA: título '{nivel_nombre}' en rol de {tipo}")
 
     # --- CONTEXTO DE NEGOCIO ---
     sectores = terminos_presentes(texto, p.sectores)
@@ -120,26 +120,26 @@ def puntuar(v: Vacante, cfg: Config) -> Evaluacion:
     # --- ANOS PEDIDOS: el minimo de todas las apariciones ---
     pedidos = [int(n) for n in _ANOS.findall(texto) if 0 < int(n) <= 20]
     if pedidos and min(pedidos) > cfg.perfil.anos_dev:
-        banderas.append(f"BRECHA: piden {min(pedidos)}+ anos de experiencia")
+        banderas.append(f"BRECHA: piden {min(pedidos)}+ años de experiencia")
 
     # --- INGLES: riesgo de entrevista, nunca descarta ---
     if _INGLES.search(texto):
-        banderas.append("RIESGO: exigen ingles alto")
+        banderas.append("RIESGO: exigen inglés alto")
 
     # --- KNOCKOUTS DUROS ---
     if _AUTORIZACION.search(texto):
-        banderas.append("KNOCKOUT: exige autorizacion laboral en otro pais")
+        banderas.append("KNOCKOUT: exige autorización laboral en otro país")
     if _COMISION.search(texto):
-        banderas.append("KNOCKOUT: pago solo por comision")
+        banderas.append("KNOCKOUT: pago solo por comisión")
 
     # --- PRESENCIALIDAD ---
     en_mi_ciudad = contiene(norm(v.ubicacion), cfg.perfil.ciudad_base)
     remoto = bool(_REMOTO_EXPLICITO.search(texto))
     if not en_mi_ciudad and not remoto:
         if _PRESENCIAL_DURO.search(texto):
-            banderas.append("KNOCKOUT: presencial o hibrido exigido")
+            banderas.append("KNOCKOUT: presencial o híbrido exigido")
         elif _PRESENCIAL_BLANDO.search(texto):
-            banderas.append("RIESGO: menciona presencial/hibrido, confirmar")
+            banderas.append("RIESGO: menciona presencial/híbrido, confirmar")
 
     knockout = any(b.startswith("KNOCKOUT") for b in banderas)
     puntaje = 0.0 if knockout else round(

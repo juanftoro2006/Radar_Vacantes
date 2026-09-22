@@ -377,3 +377,40 @@ Sin `publicada`, esa vacante de mayo habría entrado hoy como "nueva". **El trab
 3. Confirmar o quitar `agent`, `rag`, `whatsapp` del stack
 4. Limpiar `perfil.json` privado
 5. Después: capa 2b con LLM (descripción delimitada como dato, no instrucción)
+
+---
+
+## 2026-09-21 (noche) — Primera corrida real y dashboard
+
+**Primera medición real** (modo seco, 28 fuentes): 28/28 OK · 1.946 vacantes · 279 pasan prefiltro · 44 con puntaje ≥5 sin knockout. En la ventana de 7 días: 10 pasan prefiltro, **0 llegan a 5**. En 30 días: 8.
+
+- El puntaje ordena bien: la #1 del corpus es Clara *AI Growth Automation Engineer* (9.4), la misma que la v1 enterraba con 4.7.
+- El cero de la semana es del mercado, no del código. Esperable: 1–2 alertas por semana, con semanas en cero.
+
+**Hallazgo:** lo bueno del último mes quedaba fuera de la ventana de 7 días y el radar nunca lo iba a mostrar. Las mejores 6 se entregaron a mano en el chat.
+
+**Construido:**
+
+- `radar/dashboard.py`: genera `site/index.html` desde el registro. Muestra todo lo abierto con puntaje ≥5 (cualquier antigüedad), una tarjeta por huella, botón **Aplicar** y botón **Postulé**
+- `radar.yml`: genera el dashboard en cada corrida y lo publica con GitHub Pages (job `pagina`)
+- Acciones actualizadas a versiones con Node 24 (`checkout@v7`, `setup-python@v7`); las v4/v5 usaban Node 20
+- Banderas con tildes ("años", "inglés", "híbrido"); el dashboard corrige las filas viejas al mostrarlas
+
+**Decisiones:**
+
+- **Telegram para lo urgente (≤7 días), dashboard para el inventario (todo lo abierto).** Resuelve el hallazgo sin agrandar la ventana de alertas.
+- **GitHub Pages, no una página privada.** Se regenera sola 4 veces al día; el registro ya era público.
+- **"Postulé" en localStorage, no en el repo.** Privado; no se sincroniza entre dispositivos (asumido).
+- **El HTML no se versiona** (`site/` en `.gitignore`): es un derivado de `data/`.
+- **Seguridad:** títulos y URLs son de terceros. JSON escapado dentro de `<script>`, texto con `textContent`, solo enlaces http(s). Cubierto por pruebas.
+
+**Deuda:**
+
+- Falsos positivos observados: *Sales Development Representative (AI & Automation)* 7.4 y *Growth Designer (AI Focused)* 6.0 pasan por "AI" en el título. Medir dos semanas antes de tocar.
+- Decisión pendiente de Juan: ¿*Solutions Engineer* / *Sales Engineer* (preventa técnica) son objetivo?
+- Quitar `_TEXTO_LEGADO` de `dashboard.py` cuando no queden vacantes abiertas anteriores al 21-sep.
+
+**Incidente, misma noche:** la corrida programada de las 00:17 UTC (19:17 Bogotá) **nunca ocurrió**. Verificado en la página pública de Actions a las 02:35 UTC: solo existía la corrida manual. La configuración estaba bien (cron válido, archivo en `main`, Actions habilitado). Causa: GitHub no garantiza el cron. Con carga alta lo retrasa y a veces lo descarta, y las 00:00 UTC son la hora más congestionada del día.
+
+- **Decisión:** 5 turnos en vez de 4, ninguno cerca de las 00:00 UTC (06:17, 09:17, 12:17, 15:17, 18:17 Bogotá). El diseño ya tolera un turno perdido: el dedup por clave y la ventana de 7 días hacen que perder una corrida solo retrase el aviso, no lo pierda.
+- **Lección:** un cron gratuito es "a lo mejor", no "a la hora". Si algún día la hora exacta importa, el disparo va por fuera (cron-job.org llamando a `workflow_dispatch`), con su propia credencial.
