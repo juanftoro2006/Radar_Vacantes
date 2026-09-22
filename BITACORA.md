@@ -414,3 +414,5 @@ Sin `publicada`, esa vacante de mayo habría entrado hoy como "nueva". **El trab
 
 - **Decisión:** 5 turnos en vez de 4, ninguno cerca de las 00:00 UTC (06:17, 09:17, 12:17, 15:17, 18:17 Bogotá). El diseño ya tolera un turno perdido: el dedup por clave y la ventana de 7 días hacen que perder una corrida solo retrase el aviso, no lo pierda.
 - **Lección:** un cron gratuito es "a lo mejor", no "a la hora". Si algún día la hora exacta importa, el disparo va por fuera (cron-job.org llamando a `workflow_dispatch`), con su propia credencial.
+
+**Cierre del día:** GitHub Pages activado (Source: GitHub Actions). Corrida #2: `radar` OK, `pagina` falló porque Pages no estaba activado; se volvió a correr solo el job fallido y el dashboard quedó publicado en `juanftoro2006.github.io/Radar_Vacantes`. Telegram confirmado. Mañana 06:17 es la primera corrida automática con el horario nuevo.
