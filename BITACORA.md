@@ -416,3 +416,32 @@ Sin `publicada`, esa vacante de mayo habría entrado hoy como "nueva". **El trab
 - **Lección:** un cron gratuito es "a lo mejor", no "a la hora". Si algún día la hora exacta importa, el disparo va por fuera (cron-job.org llamando a `workflow_dispatch`), con su propia credencial.
 
 **Cierre del día:** GitHub Pages activado (Source: GitHub Actions). Corrida #2: `radar` OK, `pagina` falló porque Pages no estaba activado; se volvió a correr solo el job fallido y el dashboard quedó publicado en `juanftoro2006.github.io/Radar_Vacantes`. Telegram confirmado. Mañana 06:17 es la primera corrida automática con el horario nuevo.
+
+---
+
+## 2026-10-17 — Falsa alarma, Remote.com fuera y diseño del match por cobertura
+
+**Objetivo:** Juan creyó que el radar había fallado al ver "1 nuevas · 0 pasan prefiltro" y un ❌ de Remote.com en el resumen.
+
+**Diagnóstico (con `data/vacantes.csv`, 2.837 vacantes desde el 21-sep):**
+
+- **El radar está sano.** Los fines de semana siempre traen casi nada (26-sep: 4, 3-oct: 2, 10-oct: 2, 17-oct: 1). "0 pasan prefiltro" un sábado es normal. Lección: se compara contra el historial antes de declarar un fallo; el resumen ya traía el diagnóstico completo.
+- **Remote.com migró a ATS propio** (`apply.remote.com`). El board de Greenhouse da 404 desde el 15-oct. En 26 días aportó 183 vacantes, 1 pasó el prefiltro y 0 llegaron a puntaje ≥ 5.
+- **El problema real es el rendimiento.** Desde el 22-sep: 891 nuevas → 93 pasan prefiltro → 15 con puntaje ≥ 5 (unas 4 por semana, varias de ruido: *Senior Security Engineer* 5.2, *Design Engineer* 5.7). 15 de 28 fuentes nunca dieron una vacante ≥ 5. Canonical pasa 111 por el prefiltro y 0 llegan a 5: el puntaje castiga bien; el prefiltro deja pasar de más.
+
+**Construido:**
+
+- PR #1: Remote.com con `activa=no` y la causa en la nota. Se desactiva en vez de borrar para dejar rastro.
+- Claude GitHub App instalada en el repo: desde ahora los cambios llegan por rama + PR y Juan aprueba el merge.
+
+**Decisiones:**
+
+- **No escribir adaptador para el ATS de Remote.com:** serviría a una sola empresa. SmartRecruiters (Rappi, Mercado Libre, Platzi) va primero.
+- **Dirección del puntaje: cobertura.** Medir qué fracción de lo que **la vacante pide** cubre Juan, no cuántas palabras de su lista aparecen. Requisito obligatorio que falta → KNOCKOUT; deseable que falta → BRECHA. Motivo: así decide un reclutador; el conteo actual premia igual a una vacante de 40 requisitos que menciona "API" que a una de 5 que se cubre completa.
+- **Arquitectura del match en tres capas:** (1) formulario de perfil (habilidades con nivel, condiciones, no negociables) que reemplaza editar `radar.json` a mano; (2) match determinista barato sobre todo el volumen; (3) IA probabilística solo sobre las pocas que pasan (Capa 2b): equivalencias de nombres, rol disfrazado, experiencia real pedida.
+
+**Siguiente:**
+
+1. Juan revisa y hace merge del PR #1.
+2. Calibración: Juan trae dos vacantes del dashboard, una "es para mí" y una que puntuó alto pero no es para él. Se verifica si la cobertura las separa mejor que el puntaje actual **antes** de construir el formulario.
+3. Después: formulario de match (pedido por Juan, en la cola de mejoras).
