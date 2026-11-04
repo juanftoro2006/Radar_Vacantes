@@ -1,7 +1,7 @@
 {
   "telegram_offset": 668071702,
-  "ultimo_resumen": "2026-11-03",
-  "ultima_corrida": "2026-11-03T19:36:08-05:00",
+  "ultimo_resumen": "2026-11-04",
+  "ultima_corrida": "2026-11-04T13:38:01-05:00",
   "fuentes": {
     "sezzle": {
       "ok": true,
@@ -135,7 +135,7 @@
     },
     "dlocal": {
       "ok": true,
-      "detalle": "",
+      "detalle": "sin vacantes publicadas",
       "desde": "2026-09-21T16:33:41.849440-05:00"
     },
     "ciandt": {
