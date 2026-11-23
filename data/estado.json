@@ -1,7 +1,7 @@
 {
   "telegram_offset": 668071706,
-  "ultimo_resumen": "2026-11-22",
-  "ultima_corrida": "2026-11-22T19:49:32-05:00",
+  "ultimo_resumen": "2026-11-23",
+  "ultima_corrida": "2026-11-23T17:37:02-05:00",
   "fuentes": {
     "sezzle": {
       "ok": true,
@@ -20,7 +20,7 @@
     },
     "ninjatrader": {
       "ok": true,
-      "detalle": "",
+      "detalle": "sin vacantes publicadas",
       "desde": "2026-09-21T16:33:41.849440-05:00"
     },
     "remotecom": {
