@@ -68,11 +68,11 @@ Un falso positivo cuesta una lectura. Un falso negativo cuesta una oportunidad q
 
 | Señal | Ejemplo | Efecto |
 |---|---|---|
-| `KNOCKOUT` | Exige autorización laboral en EE. UU.; stack bajo el piso; staff/principal | Puntaje 0 |
-| `BRECHA` | Piden 5 años; título senior en un rol de desarrollo | Marca, no descarta |
+| `KNOCKOUT` | Exige autorización laboral en EE. UU.; stack bajo el piso; título senior/lead/staff; piden más de 3 años como requisito duro | Puntaje 0 |
+| `BRECHA` | Piden 3 años; piden 5 en tono flexible ("ideally", "preferred", "or equivalent experience") | Marca, no descarta |
 | `RIESGO` | Inglés avanzado; menciona híbrido | Marca, no descarta |
 
-Un requisito de años es negociable con evidencia. Una jurisdicción legal no lo es. Mezclarlas en un solo puntaje destruye esa distinción.
+Un requisito de años en tono flexible es negociable con evidencia; uno duro por encima del tope no vale la lectura. Una jurisdicción legal no es negociable nunca. Mezclarlas en un solo puntaje destruye esa distinción.
 
 ### La seniority depende del tipo de rol
 
@@ -83,9 +83,13 @@ Un requisito de años es negociable con evidencia. Una jurisdicción legal no lo
 | junior | 9 | 8 |
 | sin marca | 6 | 10 |
 | mid / II | 10 | 10 |
-| senior | 3 + BRECHA | 8 |
-| lead / manager / architect | KNOCKOUT | 4 + BRECHA |
+| senior | KNOCKOUT | KNOCKOUT |
+| lead / manager / architect | KNOCKOUT | KNOCKOUT |
 | staff / principal / director | KNOCKOUT | KNOCKOUT |
+
+Desde el 2026-11-28 el objetivo son roles de hasta 3 años: senior y lead descartan en las dos escalas. Con la regla anterior, 26 de las 40 vacantes del dashboard eran perfiles altos.
+
+**Si cambian las reglas, cambia el inventario.** Cada corrida vuelve a puntuar lo que sigue abierto con el `radar.json` vigente. Es determinista y barato, y la descripción ya está en memoria. Repuntuar no toca `estado` ni `notificada`.
 
 ### Piso de stack
 

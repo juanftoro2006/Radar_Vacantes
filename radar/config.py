@@ -25,6 +25,7 @@ class _Base(BaseModel):
 
 class Perfil(_Base):
     anos_dev: int
+    anos_max: int
     ciudad_base: str
 
 

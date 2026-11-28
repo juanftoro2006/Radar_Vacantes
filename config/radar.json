@@ -3,6 +3,8 @@
 
   "perfil": {
     "anos_dev": 2,
+    "anos_max": 3,
+    "_anos": "anos_dev: desde ahi se marca BRECHA. anos_max: si piden MAS que esto como requisito duro, KNOCKOUT. Si lo piden en tono flexible ('preferred', 'ideally', 'or equivalent experience'), solo BRECHA.",
     "ciudad_base": "medellin"
   },
 
@@ -89,11 +91,11 @@
     },
 
     "seniority": {
-      "_regla": "puntos 0-10. knockout=true descarta. brecha=true marca sin descartar.",
+      "_regla": "puntos 0-10. knockout=true descarta. brecha=true marca sin descartar. 2026-11-28: senior y lead son KNOCKOUT en las dos escalas (objetivo: roles de hasta 3 anos).",
       "desarrollo": {
         "top":       { "knockout": true },
         "lead":      { "knockout": true },
-        "senior":    { "puntos": 3, "brecha": true },
+        "senior":    { "knockout": true },
         "mid":       { "puntos": 10 },
         "junior":    { "puntos": 9 },
         "intern":    { "puntos": 4 },
@@ -101,8 +103,8 @@
       },
       "automatizacion": {
         "top":       { "knockout": true },
-        "lead":      { "puntos": 4, "brecha": true },
-        "senior":    { "puntos": 8 },
+        "lead":      { "knockout": true },
+        "senior":    { "knockout": true },
         "mid":       { "puntos": 10 },
         "junior":    { "puntos": 8 },
         "intern":    { "puntos": 4 },

@@ -38,27 +38,20 @@ def test_tipo_de_rol(cfg, titulo, tipo):
     assert tipo_de_rol(norm(titulo), cfg) == tipo
 
 
-def test_senior_en_automatizacion_compite(cfg):
-    ev = puntuar(vacante("Senior Automation Engineer", STACK_BUENO), cfg)
-    assert not ev.knockout and ev.puntaje >= cfg.puntaje.umbral
-    assert "BRECHA" not in " ".join(ev.banderas)
-
-
-def test_senior_en_desarrollo_es_brecha_no_knockout(cfg):
-    ev = puntuar(vacante("Senior Backend Engineer", STACK_BUENO), cfg)
-    assert not ev.knockout
-    assert any(b.startswith("BRECHA: título 'senior'") for b in ev.banderas)
-
-
-def test_lead_en_desarrollo_es_knockout(cfg):
-    ev = puntuar(vacante("Engineering Lead", STACK_BUENO), cfg)
+# 2026-11-28: objetivo = roles de hasta 3 anos. Senior y lead descartan en
+# las dos escalas; antes en automatizacion competian (8 y 4+BRECHA).
+@pytest.mark.parametrize("titulo", [
+    "Senior Automation Engineer", "Senior Backend Engineer",
+    "Engineering Lead", "Automation Operations Lead",
+])
+def test_senior_y_lead_son_knockout(cfg, titulo):
+    ev = puntuar(vacante(titulo, STACK_BUENO), cfg)
     assert ev.knockout and ev.puntaje == 0
 
 
-def test_lead_en_automatizacion_es_brecha(cfg):
-    ev = puntuar(vacante("Automation Operations Lead", STACK_BUENO), cfg)
-    assert not ev.knockout
-    assert any("BRECHA: título 'lead'" in b for b in ev.banderas)
+def test_mid_ii_sigue_compitiendo(cfg):
+    ev = puntuar(vacante("Software Engineer II", STACK_BUENO), cfg)
+    assert not ev.knockout and ev.puntaje >= cfg.puntaje.umbral
 
 
 def test_piso_de_stack_deja_bandera(cfg):
@@ -102,3 +95,23 @@ def test_hibrido_en_mi_ciudad_no_marca(cfg):
 def test_lo_que_no_pasa_el_prefiltro_no_se_puntua(cfg):
     ev = puntuar(vacante("Payroll Specialist", STACK_BUENO), cfg)
     assert ev.prefiltro == "no" and ev.puntaje is None   # vacio, no cero
+
+
+@pytest.mark.parametrize("requisito, efecto", [
+    ("3+ years of experience.", "BRECHA"),                              # dentro del tope
+    ("5+ years of experience.", "KNOCKOUT"),                            # duro, sobre el tope
+    ("3-5 years of experience.", "BRECHA"),                             # rango: cuenta el minimo
+    ("Ideally 5+ years of experience.", "BRECHA"),                      # flexible: dentro del margen
+    ("5+ years of experience preferred.", "BRECHA"),
+    ("5+ years of experience or equivalent practical experience.", "BRECHA"),
+    ("Idealmente 5 años de experiencia.", "BRECHA"),                    # en espanol y con tilde
+    ("2 years of experience.", None),                                   # dentro de anos_dev
+])
+def test_anos_pedidos(cfg, requisito, efecto):
+    ev = puntuar(vacante("Automation Engineer", STACK_BUENO + requisito), cfg)
+    anos = [b for b in ev.banderas if "años de experiencia" in b]
+    if efecto is None:
+        assert not anos
+    else:
+        assert anos and anos[0].startswith(efecto), ev.banderas
+    assert ev.knockout == (efecto == "KNOCKOUT")
