@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 from radar.pipeline import correr
-from radar.registro import leer_estado, leer_registro
+from radar.registro import guardar_registro, leer_estado, leer_registro
 from radar.telegram import interpretar
 
 from .conftest import AHORA, FIXTURES, TelegramFalso
@@ -99,3 +99,26 @@ def test_interpretar_comandos():
     assert interpretar("/visto 12, 15 20") == ("visto", [12, 15, 20])
     assert interpretar("/pendientes") == ("pendientes", [])
     assert interpretar("hola") is None
+
+
+def test_cambio_de_reglas_repuntua_lo_abierto(cfg, empresas, tmp_path):
+    # Simula una fila evaluada con reglas viejas: si radar.json cambia, lo que
+    # sigue abierto se evalua de nuevo. Sin esto, el dashboard mostraria
+    # vacantes que las reglas de hoy descartan.
+    _correr(cfg, empresas, tmp_path, TelegramFalso())
+    ruta = tmp_path / "vacantes.csv"
+    registro = leer_registro(ruta)
+    fila = next(f for f in registro if f["prefiltro"] == "si")
+    original = (fila["puntaje"], fila["banderas"])
+    fila["puntaje"], fila["banderas"] = "9.9", "BRECHA: regla vieja"
+    fila["estado"] = "vista"
+    guardar_registro(ruta, registro)
+
+    res = _correr(cfg, empresas, tmp_path, TelegramFalso(), ahora=AHORA + timedelta(hours=5))
+    assert res.repuntuadas == 1
+    despues = next(f for f in leer_registro(ruta) if f["clave"] == fila["clave"])
+    assert (despues["puntaje"], despues["banderas"]) == original
+    assert despues["estado"] == "vista"          # repuntuar no toca lo que hiciste tu
+
+    res = _correr(cfg, empresas, tmp_path, TelegramFalso(), ahora=AHORA + timedelta(hours=10))
+    assert res.repuntuadas == 0                  # sin cambio de reglas, no hay cambios

@@ -32,7 +32,7 @@ def _resumen_consola(res) -> str:
     lineas = [
         f"Fuentes OK: {ok}/{len(res.reportes)}",
         f"Revisadas: {res.revisadas} | nuevas: {res.nuevas} | pasan prefiltro: {res.pasan_prefiltro}",
-        f"Candidatas avisadas: {len(res.avisadas)} | duplicadas: {res.duplicadas} | cerradas: {res.cerradas}",
+        f"Candidatas avisadas: {len(res.avisadas)} | duplicadas: {res.duplicadas} | cerradas: {res.cerradas} | repuntuadas: {res.repuntuadas}",
     ]
     lineas += [f"  CAIDA {r.empresa} ({r.fuente}/{r.token}): {r.detalle}" for r in res.reportes if not r.ok]
     lineas += [f"  -> #{f['n']} {f['puntaje']} {f['titulo']} | {f['empresa']} | {f['url']}" for f in res.avisadas]

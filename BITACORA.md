@@ -416,3 +416,30 @@ Sin `publicada`, esa vacante de mayo habría entrado hoy como "nueva". **El trab
 - **Lección:** un cron gratuito es "a lo mejor", no "a la hora". Si algún día la hora exacta importa, el disparo va por fuera (cron-job.org llamando a `workflow_dispatch`), con su propia credencial.
 
 **Cierre del día:** GitHub Pages activado (Source: GitHub Actions). Corrida #2: `radar` OK, `pagina` falló porque Pages no estaba activado; se volvió a correr solo el job fallido y el dashboard quedó publicado en `juanftoro2006.github.io/Radar_Vacantes`. Telegram confirmado. Mañana 06:17 es la primera corrida automática con el horario nuevo.
+
+---
+
+## 2026-11-28 — Tope de 3 años: los perfiles altos salen del dashboard
+
+**Problema:** de 40 vacantes abiertas con puntaje ≥ 5, 26 eran perfiles altos: "Senior" en el título o piden 4 a 8 años. Llegaban con 6–7 puntos porque `BRECHA` solo marcaba. El dashboard no reducía la lectura.
+
+**Decisiones de Juan:**
+
+- Objetivo: roles de **hasta 3 años**, según el CV.
+- Años en **tono flexible** ("ideally 5+", "preferred", "or equivalent experience") siguen pasando: están dentro del margen.
+- `agent`, `rag` y `etl` **sí suman** en el stack (cierra el pendiente #6).
+
+**Construido:**
+
+- `perfil.anos_max: 3` en `radar.json`. Más años como requisito duro → `KNOCKOUT`; en tono flexible → `BRECHA (flexible)`.
+- `senior` y `lead` → `KNOCKOUT` en las dos escalas (antes, en automatización: 8 y 4+BRECHA).
+- **Repuntuar lo abierto en cada corrida (paso 3b).** Sin esto, el cambio solo aplicaba a lo nuevo y las 26 seguían en el dashboard hasta cerrarse. No toca `estado` ni `notificada`.
+- Pruebas: 8 casos de años, senior/lead knockout, mid II compite, repuntuar restaura y es idempotente.
+
+**Simulación con el registro real:** 40 → ~14 (aproximada: se hizo con las banderas guardadas, sin descripciones; las de tono flexible pueden quedarse). El número real sale en la primera corrida: `repuntuadas` en el log.
+
+**Deuda:**
+
+- La ventana de tono flexible (60 caracteres) puede tomar un "a plus" de otra frase y dejar pasar una vacante dura. Es el error barato; medir antes de apretar.
+- Sezzle publica la misma vacante en "Colombia" y "LATAM" con títulos distintos: la huella no las une.
+

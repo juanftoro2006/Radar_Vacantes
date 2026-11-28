@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 from .config import Config
 from .fuentes import descargar
-from .modelos import Empresa, ReporteFuente
+from .modelos import Empresa, Evaluacion, ReporteFuente
 from .puntuar import puntuar
 from .registro import guardar_estado, guardar_registro, leer_estado, leer_registro
 from .telegram import ErrorTelegram, Telegram, esc, interpretar
@@ -78,6 +78,7 @@ class Resultado:
     avisadas: list[dict] = field(default_factory=list)
     duplicadas: int = 0
     cerradas: int = 0
+    repuntuadas: int = 0
     comandos: list[str] = field(default_factory=list)
     reportes: list[ReporteFuente] = field(default_factory=list)
     errores: list[str] = field(default_factory=list)
@@ -87,6 +88,7 @@ class Resultado:
 
 _DIAS = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"]
 _MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
 
 
 def fecha_corta(dt: datetime) -> str:
@@ -145,6 +147,28 @@ def mensaje_resumen(res: Resultado, pendientes: list[dict], estado: dict, ahora:
 
 
 # --- Corrida --------------------------------------------------------------
+
+_MARCA_DUPLICADA = "; misma vacante que #"
+
+
+def _aplicar_evaluacion(fila: dict, ev: Evaluacion) -> int:
+    """Escribe la evaluacion en una fila existente. Devuelve 1 si algo cambio.
+
+    No toca estado ni notificada: repuntuar no es volver a avisar algo ya avisado.
+    Conserva la nota de duplicada que el paso 5 agrega al motivo.
+    """
+    nota = ""
+    if _MARCA_DUPLICADA in fila["motivo"]:
+        nota = fila["motivo"][fila["motivo"].index(_MARCA_DUPLICADA):]
+    nuevo = {
+        "prefiltro": ev.prefiltro, "motivo": ev.motivo + nota, "tipo_rol": ev.tipo_rol,
+        "puntaje": "" if ev.puntaje is None else f"{ev.puntaje:g}",
+        "desglose": ev.desglose, "banderas": " || ".join(ev.banderas),
+    }
+    cambio = any(fila[k] != val for k, val in nuevo.items())
+    fila.update(nuevo)
+    return int(cambio)
+
 
 def correr(
     cfg: Config,
@@ -211,6 +235,16 @@ def correr(
             elif fila["clave"] in vivas and fila["cerrada"]:
                 fila["cerrada"] = ""  # reabierta
 
+    # 3b) Repuntuar lo abierto: radar.json es la fuente de verdad. Si cambian
+    # las reglas, lo que ya esta en el registro se evalua con las reglas nuevas;
+    # si no, el dashboard seguiria mostrando vacantes que hoy serian descartadas.
+    # Es barato (determinista) y la descripcion ya esta en memoria.
+    por_clave = {f["clave"]: f for f in registro if not f["cerrada"]}
+    for v in vacantes:
+        fila = por_clave.get(v.clave)
+        if fila:
+            res.repuntuadas += _aplicar_evaluacion(fila, puntuar(v, cfg))
+
     # 4) Nuevas por clave + evaluacion
     claves = {f["clave"] for f in registro}
     siguiente = max((int(f["n"]) for f in registro), default=0) + 1
@@ -248,7 +282,7 @@ def correr(
         previa = avisadas_por_huella.get(f["huella"])
         if previa and previa is not f:
             f["estado"] = "duplicada"
-            f["motivo"] = f"{f['motivo']}; misma vacante que #{previa['n']}"
+            f["motivo"] = f"{f['motivo']}{_MARCA_DUPLICADA}{previa['n']}"
             res.duplicadas += 1
         else:
             res.avisadas.append(f)

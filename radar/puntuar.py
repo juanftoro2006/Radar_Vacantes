@@ -35,6 +35,29 @@ _ANOS = re.compile(
     r"(\d{1,2})(?:\s*(?:-|–|to|a)\s*\d{1,2})?\s*\+?\s*(?:years?|yrs?|anos)\b"
     r"(?![^.]{0,40}\b(?:in business|of history|founded)\b)"
 )
+# Tono flexible alrededor de un requisito de anos: "ideally 5+ years",
+# "5+ years preferred", "or equivalent experience". Si aparece cerca, el
+# requisito es negociable: BRECHA, no KNOCKOUT. El texto ya viene sin tildes.
+_FLEXIBLE = re.compile(
+    r"\b(?:prefer(?:red|ably)?|ideal(?:ly)?|nice to have|bonus|a plus|is a plus|"
+    r"equivalent (?:practical |professional )?experience|or equivalent|or similar|"
+    r"deseable|idealmente|preferiblemente|preferible|o equivalente)\b"
+)
+_VENTANA_FLEXIBLE = 60  # caracteres antes y despues de la mencion de anos
+
+
+def anos_pedidos(texto: str) -> list[tuple[int, bool]]:
+    """Cada mencion de anos como (numero, es_flexible). El texto debe venir normalizado."""
+    salida = []
+    for m in _ANOS.finditer(texto):
+        n = int(m.group(1))
+        if not 0 < n <= 20:
+            continue
+        ventana = texto[max(0, m.start() - _VENTANA_FLEXIBLE): m.end() + _VENTANA_FLEXIBLE]
+        salida.append((n, bool(_FLEXIBLE.search(ventana))))
+    return salida
+
+
 _INGLES = re.compile(
     r"fluent english|advanced english|english.{0,10}c[12]\b|native english|"
     r"excellent (?:written and )?(?:verbal )?english|fluency in english|"
@@ -118,9 +141,18 @@ def puntuar(v: Vacante, cfg: Config) -> Evaluacion:
     contexto = min(10.0, len(sectores) * p.puntos_por_sector)
 
     # --- ANOS PEDIDOS: el minimo de todas las apariciones ---
-    pedidos = [int(n) for n in _ANOS.findall(texto) if 0 < int(n) <= 20]
-    if pedidos and min(pedidos) > cfg.perfil.anos_dev:
-        banderas.append(f"BRECHA: piden {min(pedidos)}+ años de experiencia")
+    # Por que el minimo: "5+ years overall, 2+ with Python" pide 2 para lo tuyo.
+    # Por encima de anos_max es KNOCKOUT, salvo que el requisito venga en tono
+    # flexible: ahi esta dentro del margen y solo se marca.
+    pedidos = anos_pedidos(texto)
+    if pedidos:
+        minimo = min(n for n, _ in pedidos)
+        flexible = any(flex for n, flex in pedidos if n == minimo)
+        if minimo > cfg.perfil.anos_max and not flexible:
+            banderas.append(f"KNOCKOUT: piden {minimo}+ años de experiencia (tope {cfg.perfil.anos_max})")
+        elif minimo > cfg.perfil.anos_dev:
+            nota = " (flexible)" if flexible else ""
+            banderas.append(f"BRECHA: piden {minimo}+ años de experiencia{nota}")
 
     # --- INGLES: riesgo de entrevista, nunca descarta ---
     if _INGLES.search(texto):
